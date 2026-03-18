@@ -569,17 +569,21 @@
         });
 
         // 長條圖（支援水平和垂直）
-        function createBarChart(data, x, y, title, color = '#3b82f6', orientation = 'v', containerId = null) {
+        // x: 類別欄位, y: 數值欄位, title: 圖表標題, color: 顏色, orientation: 'h'橫向/'v'垂直
+        // xTitle: X軸顯示標題, yTitle: Y軸顯示標題
+        function createBarChart(data, x, y, title, color = '#3b82f6', orientation = 'v', containerId = null, xTitle = null, yTitle = null) {
             const container = containerId ? document.getElementById(containerId) : null;
             if (!container || !data || !data.length) return;
             const layout = getCommonLayout(title);
+            const xLabel = xTitle || x;
+            const yLabel = yTitle || y;
             if (orientation === 'h') {
-                layout.xaxis.title = { text: y, font: { size: 11, color: '#94a3b8' } };
-                layout.yaxis.title = { text: x, font: { size: 11, color: '#94a3b8' } };
+                layout.xaxis.title = { text: yLabel, font: { size: 11, color: '#94a3b8' } };
+                layout.yaxis.title = { text: xLabel, font: { size: 11, color: '#94a3b8' } };
                 layout.yaxis.side = 'left';
             } else {
-                layout.xaxis.title = { text: x, font: { size: 11, color: '#94a3b8' } };
-                layout.yaxis.title = { text: y, font: { size: 11, color: '#94a3b8' } };
+                layout.xaxis.title = { text: xLabel, font: { size: 11, color: '#94a3b8' } };
+                layout.yaxis.title = { text: yLabel, font: { size: 11, color: '#94a3b8' } };
             }
             const chartData = [{
                 x: orientation === 'h' ? data.map(d => d[y]) : data.map(d => d[x]),
@@ -591,8 +595,8 @@
                 textposition: 'outside',
                 textfont: { color: '#94a3b8', size: 10 },
                 hovertemplate: orientation === 'h'
-                    ? `<b>%{y}</b><br>${y}: %{x}<extra></extra>`
-                    : `<b>%{x}</b><br>${y}: %{y}<extra></extra>`,
+                    ? `<b>%{y}</b><br>${yLabel}: %{x}<extra></extra>`
+                    : `<b>%{x}</b><br>${yLabel}: %{y}<extra></extra>`,
                 hoverlabel: { bgcolor: 'rgba(30,30,40,0.9)', bordercolor: 'transparent', font: { color: '#fff', size: 12 } }
             }];
             Plotly.newPlot(container, chartData, layout, { responsive: true });
@@ -871,10 +875,10 @@
 
             // 渲染圖表
             if (materials.length) {
-                createBarChart(materials.slice(0, 10), 'name', 'stockQty', '材料庫存分布', '#3b82f6', 'h', 'chart-overview-stock');
+                createBarChart(materials.slice(0, 10), 'name', 'stockQty', '材料庫存分布', '#3b82f6', 'h', 'chart-overview-stock', '庫存數量', '材料名稱');
             }
             if (suppliers.length) {
-                createBarChart(suppliers.slice(0, 10), 'name', 'compositeScore', '供應商評分', '#8b5cf6', 'v', 'chart-overview-supplier');
+                createBarChart(suppliers.slice(0, 10), 'name', 'compositeScore', '供應商評分', '#8b5cf6', 'h', 'chart-overview-supplier', '評分', '供應商名稱');
             }
             const abcCounts = materials.reduce((acc, m) => { acc[m.abcClass] = (acc[m.abcClass] || 0) + 1; return acc; }, {});
             if (Object.keys(abcCounts).length) {
@@ -906,10 +910,10 @@
             const production = currentData.productionOrders || [];
 
             const invAnomaly = materials.filter(m => (m.daysInStock || 0) > 90).slice(0, 10);
-            if (invAnomaly.length) createBarChart(invAnomaly, 'name', 'daysInStock', '庫存天數', '#ef4444', 'v', 'chart-anomaly-inv');
+            if (invAnomaly.length) createBarChart(invAnomaly, 'name', 'daysInStock', '庫存天數', '#ef4444', 'h', 'chart-anomaly-inv', '在天數', '材料名稱');
 
             const supAnomaly = suppliers.filter(s => (s.onTimeDeliveryRate || 0) < 0.9).slice(0, 10);
-            if (supAnomaly.length) createBarChart(supAnomaly, 'name', 'onTimeDeliveryRate', '準時率', '#f59e0b', 'v', 'chart-anomaly-sup');
+            if (supAnomaly.length) createBarChart(supAnomaly, 'name', 'onTimeDeliveryRate', '準時率', '#f59e0b', 'h', 'chart-anomaly-sup', '準時率', '供應商名稱');
 
             const staleRatio = materials.filter(m => (m.daysInStock || 0) > 90).length / materials.length;
             const avgDelivery = suppliers.length ? suppliers.reduce((s, sup) => s + (sup.onTimeDeliveryRate || 0), 0) / suppliers.length : 0;
@@ -922,7 +926,7 @@
             ], '健康度', 'chart-anomaly-radar');
 
             const highCost = materials.filter(m => (m.unitCost || 0) > 500).slice(0, 10);
-            if (highCost.length) createBarChart(highCost, 'name', 'unitCost', '單位成本', '#f59e0b', 'v', 'chart-anomaly-cost');
+            if (highCost.length) createBarChart(highCost, 'name', 'unitCost', '單位成本', '#f59e0b', 'h', 'chart-anomaly-cost', '單位成本', '材料名稱');
         }
 
         function renderInvEfficiency(container) {
