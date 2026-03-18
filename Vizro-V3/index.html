@@ -1,0 +1,2668 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>製造產業分析儀表板 Vizro V3</title>
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        /* ===== CSS 變數：深色主題（預設）===== */
+        :root {
+            --bg-base: #0f172a;
+            --bg-surface: rgba(30, 41, 59, 0.6);
+            --glass-bg: rgba(30, 41, 59, 0.6);
+            --glass-border: rgba(255, 255, 255, 0.08);
+            --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+            --text-primary: #f8fafc;
+            --text-secondary: #94a3b8;
+            --text-muted: #64748b;
+            --accent: #3b82f6;
+            --accent-hover: #2563eb;
+            --accent-glow: rgba(59, 130, 246, 0.3);
+            --success: #10b981;
+            --danger: #ef4444;
+            --warning: #f59e0b;
+            --info: #0ea5e9;
+            --purple: #8b5cf6;
+            --sidebar-width: 260px;
+            --topbar-height: 72px;
+            --chart-grid: rgba(255, 255, 255, 0.06);
+            --table-hover: rgba(255, 255, 255, 0.02);
+            --table-header-bg: rgba(30, 41, 59, 0.9);
+            --scrollbar-thumb: rgba(255, 255, 255, 0.2);
+            --modal-backdrop: rgba(0, 0, 0, 0.6);
+        }
+        /* ===== 淺色主題（淡米白色）===== */
+        body.light-mode {
+            --bg-base: #faf7f2;
+            --bg-surface: rgba(255, 252, 247, 0.85);
+            --glass-bg: rgba(255, 251, 245, 0.75);
+            --glass-border: rgba(180, 160, 130, 0.15);
+            --glass-shadow: 0 4px 16px 0 rgba(120, 100, 70, 0.08);
+            --text-primary: #2c2418;
+            --text-secondary: #7a6e5e;
+            --text-muted: #a89e8e;
+            --chart-grid: rgba(120, 100, 70, 0.08);
+            --table-hover: rgba(180, 160, 130, 0.06);
+            --table-header-bg: rgba(245, 240, 230, 0.95);
+            --scrollbar-thumb: rgba(120, 100, 70, 0.25);
+            --modal-backdrop: rgba(40, 30, 15, 0.4);
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg-base);
+            background-image:
+                radial-gradient(at 10% 20%, rgba(59,130,246,0.12) 0px, transparent 40%),
+                radial-gradient(at 90% 80%, rgba(139,92,246,0.12) 0px, transparent 40%),
+                radial-gradient(at 50% 50%, rgba(16,185,129,0.05) 0px, transparent 50%);
+            background-attachment: fixed;
+            color: var(--text-primary);
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+            transition: background-color 0.3s, color 0.3s;
+        }
+        body.light-mode {
+            background-image:
+                radial-gradient(at 10% 20%, rgba(210,180,140,0.10) 0px, transparent 40%),
+                radial-gradient(at 90% 80%, rgba(180,150,110,0.08) 0px, transparent 40%);
+        }
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { opacity: 0.8; }
+
+        /* ===== Glass Panel ===== */
+        .glass-panel {
+            background: var(--glass-bg);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid var(--glass-border);
+            border-radius: 16px;
+            box-shadow: var(--glass-shadow);
+            transition: background 0.3s, border-color 0.3s;
+        }
+
+        /* ===== Sidebar ===== */
+        .sidebar {
+            width: var(--sidebar-width);
+            height: 100vh;
+            padding: 24px 16px;
+            display: flex;
+            flex-direction: column;
+            border-right: 1px solid var(--glass-border);
+            background: rgba(15,23,42,0.7);
+            backdrop-filter: blur(20px);
+            z-index: 10;
+            flex-shrink: 0;
+            transition: width 0.3s, background 0.3s;
+            overflow-y: auto;
+        }
+        body.light-mode .sidebar { background: rgba(250, 245, 235, 0.92); }
+        .sidebar.collapsed { width: 60px; padding: 24px 8px; }
+        .sidebar.collapsed .sidebar-header h1,
+        .sidebar.collapsed .sidebar-header p,
+        .sidebar.collapsed .nav-group-title,
+        .sidebar.collapsed .nav-item span { display: none; }
+        .sidebar.collapsed .nav-item { justify-content: center; padding: 10px; }
+        .sidebar-header { margin-bottom: 24px; padding: 0 12px; }
+        .sidebar-header h1 {
+            font-size: 1.25rem; font-weight: 700;
+            background: linear-gradient(to right, #60a5fa, #a855f7);
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+            line-height: 1.4;
+        }
+        .sidebar-header p { font-size: 0.75rem; color: var(--text-secondary); margin-top: 4px; letter-spacing: 0.5px; }
+        .nav-menu { display: flex; flex-direction: column; gap: 4px; overflow-y: auto; flex: 1; padding-right: 4px; }
+        .nav-group-title {
+            font-size: 0.7rem; text-transform: uppercase; color: var(--text-secondary);
+            font-weight: 600; letter-spacing: 1px; margin: 16px 0 8px 12px;
+        }
+        .nav-item {
+            display: flex; align-items: center; gap: 12px; padding: 10px 14px;
+            border-radius: 10px; color: var(--text-secondary); text-decoration: none;
+            cursor: pointer; transition: all 0.2s ease; font-size: 0.875rem;
+            font-weight: 500; border: 1px solid transparent;
+        }
+        .nav-item:hover { color: var(--text-primary); background: rgba(255,255,255,0.05); }
+        body.light-mode .nav-item:hover { background: rgba(180,160,130,0.08); }
+        .nav-item.active {
+            color: #fff; background: rgba(59,130,246,0.15);
+            border-color: rgba(59,130,246,0.3); box-shadow: inset 0 0 12px rgba(59,130,246,0.1);
+        }
+        body.light-mode .nav-item.active { color: var(--accent); background: rgba(59,130,246,0.06); }
+        .nav-icon { width: 18px; height: 18px; fill: currentColor; opacity: 0.8; flex-shrink: 0; }
+        .nav-item.active .nav-icon { opacity: 1; color: var(--accent); }
+
+        /* ===== Main Content ===== */
+        .main-content { flex: 1; height: 100vh; display: flex; flex-direction: column; overflow: hidden; position: relative; }
+        .topbar {
+            height: var(--topbar-height); padding: 0 32px;
+            display: flex; justify-content: space-between; align-items: center;
+            border-bottom: 1px solid var(--glass-border);
+            background: rgba(15,23,42,0.4); backdrop-filter: blur(10px);
+            z-index: 5; flex-shrink: 0; transition: background 0.3s;
+        }
+        body.light-mode .topbar { background: rgba(250, 245, 235, 0.7); }
+        .page-title { font-size: 1.5rem; font-weight: 600; display: flex; align-items: center; gap: 12px; }
+        .page-title-icon { width: 24px; height: 24px; color: var(--accent); }
+        .controls { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+        .controls .date-filter { display: flex; align-items: center; gap: 6px; }
+        .controls .date-filter input[type="date"] {
+            padding: 6px 10px; border-radius: 8px; border: 1px solid var(--glass-border);
+            background: rgba(255,255,255,0.05); color: var(--text-primary);
+            font-size: 0.8rem; font-family: inherit;
+        }
+        .controls .date-filter label { font-size: 0.75rem; color: var(--text-secondary); }
+
+        /* ===== Buttons ===== */
+        .btn {
+            padding: 8px 16px; border-radius: 8px; border: 1px solid var(--glass-border);
+            background: rgba(255,255,255,0.05); color: var(--text-primary);
+            font-size: 0.8rem; font-weight: 500; cursor: pointer;
+            transition: all 0.2s; display: flex; align-items: center; gap: 6px; font-family: inherit;
+        }
+        .btn:hover { background: rgba(255,255,255,0.1); border-color: rgba(255,255,255,0.2); }
+        .btn-primary { background: var(--accent); border-color: var(--accent); color: white; box-shadow: 0 0 15px rgba(59,130,246,0.3); }
+        .btn-primary:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
+        .btn-icon { padding: 8px; }
+        .btn svg { width: 16px; height: 16px; fill: currentColor; }
+        input[type="file"] { display: none; }
+        .btn-toggle-theme { width: 36px; height: 36px; border-radius: 50%; padding: 0; display: flex; align-items: center; justify-content: center; }
+        .btn-sidebar-toggle {
+            width: 36px; height: 36px; border-radius: 50%; padding: 0;
+            display: flex; align-items: center; justify-content: center;
+            position: absolute; top: 50%; left: -18px; transform: translateY(-50%);
+            z-index: 11; background: var(--accent); border: none; color: white;
+        }
+
+        /* ===== Tab Content ===== */
+        .tab-content { flex: 1; overflow-y: auto; padding: 24px 32px; }
+        .tab-pane { display: none; }
+        .tab-pane.active { display: block; }
+
+        /* ===== Charts Grid ===== */
+        .charts-grid { display: grid; gap: 20px; }
+        .charts-grid.cols-2 { grid-template-columns: repeat(2, 1fr); }
+        .charts-grid.cols-3 { grid-template-columns: repeat(3, 1fr); }
+        .charts-grid.cols-4 { grid-template-columns: repeat(4, 1fr); }
+        @media (max-width: 1200px) {
+            .charts-grid.cols-3, .charts-grid.cols-4 { grid-template-columns: repeat(2, 1fr); }
+        }
+        @media (max-width: 768px) {
+            .charts-grid.cols-2, .charts-grid.cols-3, .charts-grid.cols-4 { grid-template-columns: 1fr; }
+        }
+
+        /* ===== Chart Card ===== */
+        .chart-card {
+            background: var(--glass-bg);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid var(--glass-border);
+            border-radius: 16px;
+            padding: 20px;
+            min-height: 350px;
+        }
+        .chart-card.large { min-height: 450px; }
+        .chart-card.full-width { grid-column: 1 / -1; }
+        .chart-title {
+            font-size: 1rem; font-weight: 600; margin-bottom: 16px;
+            display: flex; align-items: center; gap: 8px;
+        }
+        .chart-container { width: 100%; height: calc(100% - 40px); min-height: 280px; }
+
+        /* ===== KPI Cards ===== */
+        .kpi-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 24px; }
+        .kpi-card {
+            background: var(--glass-bg); backdrop-filter: blur(16px);
+            border: 1px solid var(--glass-border); border-radius: 16px;
+            padding: 20px; text-align: center;
+        }
+        .kpi-label { font-size: 0.875rem; color: var(--text-secondary); margin-bottom: 8px; }
+        .kpi-value { font-size: 2rem; font-weight: 700; }
+        .kpi-change { font-size: 0.75rem; margin-top: 4px; }
+        .text-success { color: var(--success); }
+        .text-danger { color: var(--danger); }
+        .text-warning { color: var(--warning); }
+        .text-info { color: var(--info); }
+
+        /* ===== Tables ===== */
+        .data-table {
+            width: 100%; border-collapse: collapse; font-size: 0.875rem;
+        }
+        .data-table th, .data-table td {
+            padding: 12px 16px; text-align: left; border-bottom: 1px solid var(--glass-border);
+        }
+        .data-table th {
+            background: var(--table-header-bg); font-weight: 600;
+            position: sticky; top: 0;
+        }
+        .data-table tr:hover { background: var(--table-hover); }
+
+        /* ===== Filter ===== */
+        .filter-bar {
+            display: flex; gap: 12px; margin-bottom: 20px; flex-wrap: wrap;
+            align-items: center;
+        }
+        .filter-select {
+            padding: 8px 12px; border-radius: 8px; border: 1px solid var(--glass-border);
+            background: rgba(255,255,255,0.05); color: var(--text-primary);
+            font-size: 0.875rem; min-width: 150px;
+        }
+
+        /* ===== Loading ===== */
+        .loading { text-align: center; padding: 100px; color: var(--text-secondary); }
+
+        /* ===== Page Header ===== */
+        .page-header { margin-bottom: 24px; }
+        .page-header h2 { font-size: 1.5rem; font-weight: 600; display: flex; align-items: center; gap: 12px; }
+
+        @media (max-width: 768px) {
+            .sidebar { width: 60px; padding: 24px 8px; }
+            .sidebar .sidebar-header h1, .sidebar .sidebar-header p,
+            .sidebar .nav-group-title, .sidebar .nav-item span { display: none; }
+            .sidebar .nav-item { justify-content: center; padding: 10px; }
+            .main-content { margin-left: 60px; }
+            .kpi-row { grid-template-columns: repeat(2, 1fr); }
+        }
+
+        /* ===== Simulator Controls ===== */
+        .simulator-controls { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin-bottom: 24px; }
+        .glass-panel.sim-slider-group { padding: 16px; border-radius: 12px; }
+        .glass-panel.sim-slider-group label { font-size: 0.8rem; color: var(--text-secondary); display: block; margin-bottom: 8px; }
+        .glass-panel.sim-slider-group .sim-value { font-size: 1.2rem; font-weight: 700; color: var(--accent); text-align: center; margin-bottom: 4px; }
+        .glass-panel.sim-slider-group input[type="range"] { width: 100%; accent-color: var(--accent); cursor: pointer; }
+        .glass-panel.sim-summary { padding: 20px; border-radius: 12px; text-align: center; margin-bottom: 24px; }
+        .glass-panel.sim-summary .big-number { font-size: 2rem; font-weight: 700; }
+        .glass-panel.sim-summary .sub-text { font-size: 0.8rem; color: var(--text-secondary); margin-top: 4px; }
+
+        /* ===== Gauge Grid ===== */
+        .gauge-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin-bottom: 24px; }
+        .gauge-widget { padding: 24px; text-align: center; border-radius: 12px; }
+        .gauge-label { font-size: 0.85rem; color: var(--text-secondary); margin-top: 8px; }
+        .gauge-value-text { font-size: 1.5rem; font-weight: 700; margin-top: 4px; }
+        .gauge-sparkline { display: flex; align-items: end; justify-content: center; gap: 2px; height: 24px; margin-top: 8px; }
+        .gauge-sparkline .spark-bar { width: 4px; border-radius: 2px; background: var(--accent); transition: height 0.3s; }
+
+        /* ===== Insight Cards ===== */
+        .insight-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; margin-top: 24px; }
+        .insight-card { padding: 16px; border-left: 3px solid var(--accent); border-radius: 0 12px 12px 0; }
+        .insight-card .insight-icon { font-size: 1.2rem; margin-bottom: 6px; }
+        .insight-card .insight-text { font-size: 0.8rem; color: var(--text-secondary); line-height: 1.6; }
+        .insight-card .insight-title { font-size: 0.9rem; font-weight: 600; margin-bottom: 8px; }
+
+        /* ===== Traffic Summary Bar ===== */
+        .traffic-summary-bar { display: flex; gap: 12px; margin-bottom: 20px; padding: 12px 16px; border-radius: 12px; align-items: center; flex-wrap: wrap; }
+        .traffic-summary-item { display: flex; align-items: center; gap: 6px; font-size: 0.85rem; }
+        .traffic-dot { width: 12px; height: 12px; border-radius: 50%; }
+        .traffic-dot.green { background: var(--success); box-shadow: 0 0 8px rgba(16,185,129,0.4); }
+        .traffic-dot.yellow { background: var(--warning); box-shadow: 0 0 8px rgba(245,158,11,0.4); }
+        .traffic-dot.red { background: var(--danger); box-shadow: 0 0 8px rgba(239,68,68,0.4); }
+
+        /* ===== VSM ===== */
+        .vsm-container { overflow-x: auto; padding: 20px 0; }
+        .vsm-flow { display: flex; align-items: center; gap: 0; min-width: 900px; padding: 0 20px; }
+        .vsm-node { background: var(--glass-bg); border: 1px solid var(--glass-border); border-radius: 12px; padding: 16px; min-width: 110px; text-align: center; position: relative; transition: all 0.3s; flex-shrink: 0; }
+        .vsm-node.bottleneck { border-color: var(--danger); box-shadow: 0 0 16px rgba(239,68,68,0.3); }
+        .vsm-node .node-title { font-size: 0.75rem; font-weight: 600; margin-bottom: 8px; color: var(--text-primary); }
+        .vsm-node .node-metric { font-size: 0.7rem; color: var(--text-secondary); line-height: 1.5; }
+        .vsm-node .node-metric b { color: var(--text-primary); }
+        .vsm-arrow { width: 40px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+        .vsm-arrow svg { width: 32px; height: 20px; color: var(--text-muted); }
+        .vsm-arrow.animated svg { animation: arrowPulse 1.5s ease-in-out infinite; }
+        @keyframes arrowPulse { 0%,100% { opacity: 0.4; } 50% { opacity: 1; } }
+        .vsm-timeline { margin-top: 20px; border-radius: 12px; }
+        .vsm-timeline-bar { height: 8px; border-radius: 4px; background: var(--glass-border); overflow: hidden; display: flex; margin-top: 8px; }
+        .vsm-timeline-bar .segment { height: 100%; transition: width 0.5s; }
+        .vsm-efficiency { display: flex; gap: 24px; margin-top: 16px; }
+        .vsm-efficiency .stat { text-align: center; flex: 1; }
+        .vsm-efficiency .stat-value { font-size: 1.5rem; font-weight: 700; }
+        .vsm-efficiency .stat-label { font-size: 0.75rem; color: var(--text-secondary); }
+
+        /* ===== Quadrant ===== */
+        .quadrant-layout { display: grid; grid-template-columns: 3fr 1fr; gap: 20px; margin-bottom: 24px; }
+        .quadrant-side { display: flex; flex-direction: column; gap: 12px; }
+        .quadrant-stat { padding: 12px; border-radius: 10px; }
+        .quadrant-stat .q-label { font-size: 0.75rem; color: var(--text-secondary); }
+        .quadrant-stat .q-value { font-size: 1rem; font-weight: 600; margin-top: 2px; }
+        .quadrant-stat .q-count { font-size: 0.7rem; color: var(--text-muted); margin-top: 2px; }
+
+        /* ===== Grid KPI ===== */
+        .grid-kpi { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 24px; }
+
+        /* ===== Status Badges ===== */
+        .status-badge { padding: 4px 8px; border-radius: 4px; font-size: 0.7rem; font-weight: 500; display: inline-block; }
+        .badge-success { background: rgba(16,185,129,0.2); color: #34d399; }
+        .badge-warning { background: rgba(245,158,11,0.2); color: #fbbf24; }
+        .badge-danger { background: rgba(239,68,68,0.2); color: #f87171; }
+        .badge-info { background: rgba(14,165,233,0.2); color: #38bdf8; }
+
+        @media (max-width: 1200px) {
+            .simulator-controls { grid-template-columns: 1fr; }
+            .gauge-grid { grid-template-columns: repeat(2, 1fr); }
+            .quadrant-layout { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+    <!-- Sidebar -->
+    <nav class="sidebar" id="sidebar">
+        <div class="sidebar-header">
+            <h1>製造產業分析</h1>
+            <p>Vizro V3 Dashboard</p>
+        </div>
+        <div class="nav-menu" id="nav-menu">
+            <!-- Navigation items will be populated by JS -->
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="main-content">
+        <!-- Topbar -->
+        <header class="topbar">
+            <div class="page-title">
+                <span id="page-title-text">總覽</span>
+            </div>
+            <div class="controls">
+                <div class="date-filter">
+                    <label>日期範圍：</label>
+                    <input type="date" id="date-start">
+                    <span>~</span>
+                    <input type="date" id="date-end">
+                </div>
+                <button class="btn" onclick="document.getElementById('file-input').click()">
+                    <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg>
+                    匯入
+                </button>
+                <input type="file" id="file-input" accept=".xlsx,.xls,.json" onchange="handleFileUpload(event)">
+                <button class="btn" onclick="exportPDF()">
+                    <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+                    匯出
+                </button>
+                <button class="btn btn-toggle-theme" onclick="toggleTheme()" title="切換主題">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+                    </svg>
+                </button>
+                <button class="btn btn-sidebar-toggle" onclick="toggleSidebar()">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/>
+                    </svg>
+                </button>
+            </div>
+        </header>
+
+        <!-- Tab Content -->
+        <div class="tab-content" id="tab-content">
+            <!-- Pages will be populated by JS -->
+        </div>
+    </main>
+
+    <script>
+        // ==================== 導航配置 ====================
+        const NAV_ITEMS = [
+            { id: 'overview', title: '總覽', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>' },
+            { id: 'anomaly', title: '異常預警', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>' },
+            { id: 'inv-efficiency', title: '庫存效能', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>' },
+            { id: 'inv-risk', title: '呆滯與風險', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>' },
+            { id: 'sup-price', title: '價格與降本', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>' },
+            { id: 'sup-time', title: '採購時效', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>' },
+            { id: 'sup-perf', title: '供應商評分', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>' },
+            { id: 'cost-bom', title: 'BOM結構', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>' },
+            { id: 'cost-yield', title: '生產良率', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>' },
+            { id: 'cost-struct', title: '成本結構', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>' },
+            { id: 'cost-var', title: '成本差異', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>' },
+            { id: 'cost-rca', title: '根因分析', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>' },
+            { id: 'forecast', title: '滾動預測', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>' },
+            { id: 'dax-kb', title: 'DAX知識庫', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>' },
+            { id: 'iron-triangle', title: '鐵三角', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>' },
+            { id: 'cashflow', title: '現金流', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>' },
+            { id: 'risk-matrix', title: '風險矩陣', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>' },
+            { id: 'procurement-quad', title: '採購四象限', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>' },
+            { id: 'whatif', title: 'What-If模擬', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>' },
+            { id: 'exec-cockpit', title: '執行儀表板', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>' },
+            { id: 'vsm', title: '價值流', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>' },
+            { id: 'benchmark', title: '基準比較', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>' },
+        ];
+
+        // ==================== 全域資料 ====================
+        let currentData = null;
+        let activePage = 'overview';
+
+        // ==================== 初始化 ====================
+        async function init() {
+            renderNav();
+            await loadData();
+            renderPage('overview');
+
+            // 日期篩選事件
+            document.getElementById('date-start').addEventListener('change', () => renderPage(activePage));
+            document.getElementById('date-end').addEventListener('change', () => renderPage(activePage));
+        }
+
+        // ==================== 導航渲染 ====================
+        function renderNav() {
+            const navMenu = document.getElementById('nav-menu');
+            let html = '';
+            let currentGroup = '';
+
+            NAV_ITEMS.forEach(item => {
+                const group = getNavGroup(item.id);
+                if (group !== currentGroup) {
+                    if (currentGroup) html += '</div>';
+                    html += `<div class="nav-group-title">${group}</div><div>`;
+                    currentGroup = group;
+                }
+                html += `<div class="nav-item ${item.id === activePage ? 'active' : ''}" data-page="${item.id}">
+                    <span class="nav-icon">${item.icon}</span>
+                    <span>${item.title}</span>
+                </div>`;
+            });
+            html += '</div>';
+            navMenu.innerHTML = html;
+
+            // 點擊事件
+            document.querySelectorAll('.nav-item').forEach(item => {
+                item.addEventListener('click', () => {
+                    const pageId = item.getAttribute('data-page');
+                    switchPage(pageId);
+                });
+            });
+        }
+
+        function getNavGroup(pageId) {
+            if (['overview', 'anomaly'].includes(pageId)) return '戰情中心';
+            if (['inv-efficiency', 'inv-risk'].includes(pageId)) return '庫存管理';
+            if (['sup-price', 'sup-time', 'sup-perf'].includes(pageId)) return '供應商管理';
+            if (['cost-bom', 'cost-yield', 'cost-struct', 'cost-var', 'cost-rca'].includes(pageId)) return '成本分析';
+            if (['forecast', 'dax-kb'].includes(pageId)) return '預測與知識';
+            if (['iron-triangle', 'cashflow', 'risk-matrix', 'procurement-quad', 'whatif', 'exec-cockpit', 'vsm', 'benchmark'].includes(pageId)) return '進階分析';
+            return '';
+        }
+
+        function switchPage(pageId) {
+            activePage = pageId;
+            document.querySelectorAll('.nav-item').forEach(item => {
+                item.classList.toggle('active', item.getAttribute('data-page') === pageId);
+            });
+            document.getElementById('page-title-text').textContent = NAV_ITEMS.find(n => n.id === pageId)?.title || '';
+            renderPage(pageId);
+        }
+
+        // ==================== 資料載入 ====================
+        async function loadData() {
+            try {
+                const response = await fetch('manufacturing_data_v3.json');
+                currentData = await response.json();
+                initDateFilter();
+            } catch (error) {
+                console.error('載入資料失敗:', error);
+                document.getElementById('tab-content').innerHTML = '<div class="loading">載入資料失敗，請確保 HTTP 伺服器運行中</div>';
+            }
+        }
+
+        function initDateFilter() {
+            if (!currentData?.purchaseOrders?.length) return;
+            const dates = currentData.purchaseOrders.map(p => p.date).sort();
+            document.getElementById('date-start').value = dates[0];
+            document.getElementById('date-end').value = dates[dates.length - 1];
+        }
+
+        function filterByDate(data) {
+            if (!data) return [];
+            const start = document.getElementById('date-start').value;
+            const end = document.getElementById('date-end').value;
+            if (!start || !end) return data;
+            return data.filter(d => d.date >= start && d.date <= end);
+        }
+
+        // ==================== 頁面渲染 ====================
+        function renderPage(pageId) {
+            const content = document.getElementById('tab-content');
+
+            switch(pageId) {
+                case 'overview': renderOverview(content); break;
+                case 'anomaly': renderAnomaly(content); break;
+                case 'inv-efficiency': renderInvEfficiency(content); break;
+                case 'inv-risk': renderInvRisk(content); break;
+                case 'sup-price': renderSupPrice(content); break;
+                case 'sup-time': renderSupTime(content); break;
+                case 'sup-perf': renderSupPerf(content); break;
+                case 'cost-bom': renderCostBom(content); break;
+                case 'cost-yield': renderCostYield(content); break;
+                case 'cost-struct': renderCostStruct(content); break;
+                case 'cost-var': renderCostVar(content); break;
+                case 'cost-rca': renderCostRca(content); break;
+                case 'forecast': renderForecast(content); break;
+                case 'dax-kb': renderDaxKb(content); break;
+                case 'iron-triangle': renderIronTriangle(content); break;
+                case 'cashflow': renderCashflow(content); break;
+                case 'risk-matrix': renderRiskMatrix(content); break;
+                case 'procurement-quad': renderProcurementQuad(content); break;
+                case 'whatif': renderWhatif(content); break;
+                case 'exec-cockpit': renderExecCockpit(content); break;
+                case 'vsm': renderVsm(content); break;
+                case 'benchmark': renderBenchmark(content); break;
+            }
+        }
+
+        // ==================== 圖表渲染函數（完整版）===================
+
+        // 通用佈局配置
+        const getCommonLayout = (title, height = 300) => ({
+            title: { text: title, font: { size: 14, color: '#94a3b8' } },
+            paper_bgcolor: 'rgba(0,0,0,0)',
+            plot_bgcolor: 'rgba(0,0,0,0)',
+            font: { color: '#94a3b8', size: 11 },
+            margin: { t: 40, r: 20, l: 50, b: 50 },
+            height: height,
+            xaxis: { gridcolor: 'rgba(255,255,255,0.06)', color: '#94a3b8', tickfont: { size: 10 } },
+            yaxis: { gridcolor: 'rgba(255,255,255,0.06)', color: '#94a3b8', tickfont: { size: 10 } },
+            showlegend: true,
+            legend: { font: { color: '#94a3b8', size: 10 }, orientation: 'h', x: 0.5, xanchor: 'center', y: -0.1 }
+        });
+
+        // 長條圖（支援水平和垂直）
+        function createBarChart(data, x, y, title, color = '#3b82f6', orientation = 'v', containerId = null) {
+            const container = containerId ? document.getElementById(containerId) : null;
+            if (!container || !data || !data.length) return;
+            const layout = getCommonLayout(title);
+            if (orientation === 'h') {
+                layout.xaxis.title = y;
+                layout.yaxis.title = x;
+                layout.yaxis.side = 'left';
+            } else {
+                layout.xaxis.title = x;
+                layout.yaxis.title = y;
+            }
+            const chartData = [{
+                x: orientation === 'h' ? data.map(d => d[y]) : data.map(d => d[x]),
+                y: orientation === 'h' ? data.map(d => d[x]) : data.map(d => d[y]),
+                type: 'bar',
+                orientation: orientation === 'h' ? 'h' : 'v',
+                marker: { color: Array.isArray(color) ? color : color, line: { color: 'transparent', width: 0 } },
+                text: orientation === 'h' ? data.map(d => d[y]) : data.map(d => d[y]),
+                textposition: 'outside',
+                textfont: { color: '#94a3b8', size: 10 }
+            }];
+            Plotly.newPlot(container, chartData, layout, { responsive: true });
+        }
+
+        // 甜甜圈圖
+        function createDoughnutChart(data, names, values, title, containerId = null) {
+            const container = containerId ? document.getElementById(containerId) : null;
+            if (!container || !data || !data.length) return;
+            // 支援兩種格式：
+            // 1. data 為物件陣列：data = [{class:'A', count:5}, ...]，names='class', values='count'
+            // 2. data 為簡單物件：data = {'A':5, 'B':3}，會自動轉換
+            let chartLabels, chartValues;
+            if (typeof data[0] === 'object' && !Array.isArray(data[0])) {
+                chartLabels = data.map(d => d[names]);
+                chartValues = data.map(d => d[values]);
+            } else {
+                // data 是 Object.entries 格式 [[key,value],...]
+                chartLabels = data.map(d => d[0]);
+                chartValues = data.map(d => d[1]);
+            }
+            Plotly.newPlot(container, [{
+                values: chartValues,
+                labels: chartLabels,
+                type: 'pie',
+                hole: 0.65,
+                marker: { colors: ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#0ea5e9', '#ec4899', '#14b8a6'] },
+                textinfo: 'label+percent',
+                textfont: { color: '#fff', size: 10 },
+                hovertemplate: '%{label}<br>%{percent}<extra></extra>'
+            }], {
+                title: { text: title, font: { size: 14, color: '#94a3b8' } },
+                paper_bgcolor: 'rgba(0,0,0,0)',
+                font: { color: '#94a3b8' },
+                margin: { t: 40, r: 20, l: 20, b: 60 },
+                showlegend: true,
+                legend: { font: { color: '#94a3b8', size: 10 } }
+            }, { responsive: true });
+        }
+
+        // 雷達圖
+        function createRadarChart(labels, data, title, containerId = null) {
+            const container = containerId ? document.getElementById(containerId) : null;
+            if (!container || !labels || !labels.length) return;
+            Plotly.newPlot(container, [{
+                type: 'scatterpolar',
+                r: data,
+                theta: labels,
+                fill: 'toself',
+                fillcolor: 'rgba(59, 130, 246, 0.3)',
+                line: { color: '#3b82f6', width: 2 },
+                marker: { color: '#3b82f6', size: 6 },
+                hovertemplate: '%{theta}<br>%{r}<extra></extra>'
+            }], {
+                title: { text: title, font: { size: 14, color: '#94a3b8' } },
+                paper_bgcolor: 'rgba(0,0,0,0)',
+                font: { color: '#94a3b8', size: 11 },
+                margin: { t: 40, r: 20, l: 20, b: 40 },
+                polar: {
+                    bgcolor: 'rgba(0,0,0,0)',
+                    angularaxis: { color: '#94a3b8', tickfont: { size: 10 } },
+                    radialaxis: { color: '#94a3b8', tickfont: { size: 9 }, gridcolor: 'rgba(255,255,255,0.08)', linewidth: 1 }
+                },
+                showlegend: false
+            }, { responsive: true });
+        }
+
+        // 線圖/趨勢圖
+        function createLineChart(data, x, y, title, lines = [], containerId = null) {
+            const container = containerId ? document.getElementById(containerId) : null;
+            if (!container || !data || !data.length) return;
+            const layout = getCommonLayout(title);
+            let traces;
+            if (lines.length) {
+                traces = lines;
+            } else {
+                traces = [{
+                    x: data.map(d => d[x]),
+                    y: data.map(d => d[y]),
+                    name: y,
+                    type: 'scatter',
+                    mode: 'lines+markers',
+                    line: { color: '#3b82f6', width: 2 },
+                    marker: { size: 5, color: '#3b82f6' },
+                    fill: 'tozeroy',
+                    fillcolor: 'rgba(59, 130, 246, 0.15)'
+                }];
+            }
+            Plotly.newPlot(container, traces, layout, { responsive: true });
+        }
+
+        // 多線圖
+        function createMultiLineChart(data, x, series, title, containerId = null) {
+            const container = containerId ? document.getElementById(containerId) : null;
+            if (!container || !data || !data.length) return;
+            const layout = getCommonLayout(title);
+            const colors = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#0ea5e9'];
+            const traces = series.map((s, i) => ({
+                x: data.map(d => d[x]),
+                y: data.map(d => d[s.key]),
+                name: s.label,
+                type: 'scatter',
+                mode: 'lines+markers',
+                line: { color: colors[i % colors.length], width: 2 },
+                marker: { size: 4 }
+            }));
+            Plotly.newPlot(container, traces, layout, { responsive: true });
+        }
+
+        // 散佈圖
+        function createScatterChart(data, x, y, title, sizeKey = null, colorKey = null, containerId = null) {
+            const container = containerId ? document.getElementById(containerId) : null;
+            if (!container || !data || !data.length) return;
+            const layout = getCommonLayout(title);
+            const trace = {
+                x: data.map(d => d[x]),
+                y: data.map(d => d[y]),
+                mode: 'markers',
+                type: 'scatter',
+                marker: {
+                    size: sizeKey ? data.map(d => Math.max(8, Math.min(25, d[sizeKey] / 10))) : 12,
+                    opacity: 0.75
+                }
+            };
+            if (colorKey) {
+                trace.marker.color = data.map(d => d[colorKey]);
+                trace.marker.colorscale = 'RdYlGn';
+                trace.marker.showscale = true;
+                trace.marker.colorbar = { tickfont: { color: '#94a3b8', size: 9 }, title: { text: colorKey, font: { color: '#94a3b8', size: 9 } } };
+            } else {
+                trace.marker.color = '#3b82f6';
+            }
+            Plotly.newPlot(container, [trace], layout, { responsive: true });
+        }
+
+        // 堆疊長條圖
+        function createStackedBarChart(data, x, series, title, containerId = null) {
+            const container = containerId ? document.getElementById(containerId) : null;
+            if (!container || !data || !data.length) return;
+            const layout = getCommonLayout(title);
+            const colors = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'];
+            const traces = series.map((s, i) => ({
+                x: data.map(d => d[x]),
+                y: data.map(d => d[s.key]),
+                name: s.label,
+                type: 'bar',
+                marker: { color: colors[i % colors.length] },
+                stackgroup: 'one'
+            }));
+            Plotly.newPlot(container, traces, layout, { responsive: true });
+        }
+
+        // 瀑布圖
+        function createWaterfallChart(labels, values, title, containerId = null) {
+            const container = containerId ? document.getElementById(containerId) : null;
+            if (!container || !labels || !labels.length) return;
+            const layout = getCommonLayout(title);
+            layout.xaxis.type = 'category';
+            const colors = values.map(v => v >= 0 ? '#10b981' : '#ef4444');
+            const traces = [{
+                x: labels,
+                y: values,
+                type: 'bar',
+                marker: { color: colors },
+                text: values.map(v => (v >= 0 ? '+' : '') + v.toFixed(0)),
+                textposition: 'outside',
+                textfont: { color: '#94a3b8', size: 10 }
+            }];
+            Plotly.newPlot(container, traces, layout, { responsive: true });
+        }
+
+        // 儀表盤（gauge）
+        function createGaugeChart(value, max, title, containerId = null) {
+            const container = containerId ? document.getElementById(containerId) : null;
+            if (!container) return;
+            const pct = Math.min(100, (value / max) * 100);
+            const color = pct < 30 ? '#10b981' : pct < 70 ? '#f59e0b' : '#ef4444';
+            Plotly.newPlot(container, [{
+                type: 'indicator',
+                mode: 'gauge+number',
+                value: value,
+                max: max,
+                gauge: {
+                    axis: { range: [0, max], ticks: '', tickcolor: '#94a3b8' },
+                    bar: { color: color, thickness: 0.3 },
+                    bgcolor: 'rgba(0,0,0,0)',
+                    bordercolor: '#94a3b8',
+                    borderwidth: 1,
+                    steps: [
+                        { range: [0, max * 0.3], color: 'rgba(16, 185, 129, 0.2)' },
+                        { range: [max * 0.3, max * 0.7], color: 'rgba(245, 158, 11, 0.2)' },
+                        { range: [max * 0.7, max], color: 'rgba(239, 68, 68, 0.2)' }
+                    ]
+                }
+            }], {
+                title: { text: title, font: { size: 14, color: '#94a3b8' } },
+                paper_bgcolor: 'rgba(0,0,0,0)',
+                font: { color: '#94a3b8' },
+                margin: { t: 40, r: 20, l: 20, b: 40 }
+            }, { responsive: true });
+        }
+
+        // ==================== 頁面實作 ====================
+
+        function renderOverview(container) {
+            const materials = currentData.materials || [];
+            const suppliers = currentData.suppliers || [];
+            const production = currentData.productionOrders || [];
+            const inventory = currentData.inventorySnapshots || [];
+
+            const avgYield = production.length ? (production.reduce((s, p) => s + (p.yieldRate || 0), 0) / production.length * 100).toFixed(1) : 0;
+            const invValue = inventory.reduce((s, i) => s + (i.value || 0), 0);
+
+            container.innerHTML = `
+                <div class="page-header">
+                    <h2><svg class="page-title-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg> 總覽 Dashboard</h2>
+                </div>
+
+                <div class="kpi-row">
+                    <div class="kpi-card">
+                        <div class="kpi-label">材料數量</div>
+                        <div class="kpi-value" style="color: #3b82f6">${materials.length}</div>
+                        <div class="kpi-change text-success">項材料</div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">供應商數</div>
+                        <div class="kpi-value" style="color: #8b5cf6">${suppliers.length}</div>
+                        <div class="kpi-change">家合格供應商</div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">平均良率</div>
+                        <div class="kpi-value" style="color: #10b981">${avgYield}%</div>
+                        <div class="kpi-change text-success">▲ 1.2% vs 上月</div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">庫存價值</div>
+                        <div class="kpi-value" style="color: #f59e0b">$${(invValue/1000000).toFixed(1)}M</div>
+                        <div class="kpi-change text-danger">▼ 5% vs 上月</div>
+                    </div>
+                </div>
+
+                <div class="charts-grid cols-2">
+                    <div class="chart-card">
+                        <div class="chart-title">材料庫存分布 (Top 10)</div>
+                        <div class="chart-container" id="chart-overview-stock"></div>
+                    </div>
+                    <div class="chart-card">
+                        <div class="chart-title">供應商評分</div>
+                        <div class="chart-container" id="chart-overview-supplier"></div>
+                    </div>
+                    <div class="chart-card">
+                        <div class="chart-title">庫存 ABC 分類</div>
+                        <div class="chart-container" id="chart-overview-abc"></div>
+                    </div>
+                    <div class="chart-card">
+                        <div class="chart-title">健康度雷達</div>
+                        <div class="chart-container" id="chart-overview-radar"></div>
+                    </div>
+                </div>
+            `;
+
+            // 渲染圖表
+            if (materials.length) {
+                createBarChart(materials.slice(0, 10), 'name', 'stockQty', '材料庫存分布', '#3b82f6', 'v', 'chart-overview-stock');
+            }
+            if (suppliers.length) {
+                createBarChart(suppliers.slice(0, 10), 'name', 'compositeScore', '供應商評分', '#8b5cf6', 'v', 'chart-overview-supplier');
+            }
+            const abcCounts = materials.reduce((acc, m) => { acc[m.abcClass] = (acc[m.abcClass] || 0) + 1; return acc; }, {});
+            if (Object.keys(abcCounts).length) {
+                createDoughnutChart(Object.entries(abcCounts).map(([k,v]) => ({class: k, count: v})), 'class', 'count', 'ABC分類', 'chart-overview-abc');
+            }
+            // 健康度雷達
+            const staleRatio = materials.filter(m => m.daysInStock > 90).length / materials.length;
+            const avgDelivery = suppliers.length ? suppliers.reduce((s, sup) => s + (sup.onTimeDeliveryRate || 0), 0) / suppliers.length : 0;
+            const avgYieldRate = production.length ? production.reduce((s, p) => s + (p.yieldRate || 0), 0) / production.length : 0;
+            const invScore = Math.min(100, Math.round((1 - staleRatio) * 100));
+            const supScore = Math.min(100, Math.round(avgDelivery * 100));
+            const yieldScore = Math.min(100, Math.round(avgYieldRate * 100));
+            const costScore = 85; // 假設值
+            createRadarChart(['庫存健康', '供應商交期', '生產良率', '成本控制'], [invScore, supScore, yieldScore, costScore], '健康度', 'chart-overview-radar');
+        }
+
+        function renderAnomaly(container) {
+            container.innerHTML = `
+                <div class="page-header"><h2>異常預警雷達</h2></div>
+                <div class="charts-grid cols-2">
+                    <div class="chart-card"><div class="chart-title">庫存異常</div><div class="chart-container" id="chart-anomaly-inv"></div></div>
+                    <div class="chart-card"><div class="chart-title">供應商異常</div><div class="chart-container" id="chart-anomaly-sup"></div></div>
+                    <div class="chart-card"><div class="chart-title">健康度雷達</div><div class="chart-container" id="chart-anomaly-radar"></div></div>
+                    <div class="chart-card"><div class="chart-title">成本異常</div><div class="chart-container" id="chart-anomaly-cost"></div></div>
+                </div>
+            `;
+            const materials = currentData.materials || [];
+            const suppliers = currentData.suppliers || [];
+            const production = currentData.productionOrders || [];
+
+            const invAnomaly = materials.filter(m => (m.daysInStock || 0) > 90).slice(0, 10);
+            if (invAnomaly.length) createBarChart(invAnomaly, 'name', 'daysInStock', '庫存天數', '#ef4444', 'v', 'chart-anomaly-inv');
+
+            const supAnomaly = suppliers.filter(s => (s.onTimeDeliveryRate || 0) < 0.9).slice(0, 10);
+            if (supAnomaly.length) createBarChart(supAnomaly, 'name', 'onTimeDeliveryRate', '準時率', '#f59e0b', 'v', 'chart-anomaly-sup');
+
+            const staleRatio = materials.filter(m => (m.daysInStock || 0) > 90).length / materials.length;
+            const avgDelivery = suppliers.length ? suppliers.reduce((s, sup) => s + (sup.onTimeDeliveryRate || 0), 0) / suppliers.length : 0;
+            const avgYieldRate = production.length ? production.reduce((s, p) => s + (p.yieldRate || 0), 0) / production.length : 0;
+            createRadarChart(['庫存', '交期', '良率', '品質'], [
+                Math.min(100, Math.round((1 - staleRatio) * 100)),
+                Math.min(100, Math.round(avgDelivery * 100)),
+                Math.min(100, Math.round(avgYieldRate * 100)),
+                Math.min(100, Math.round(avgDelivery * 100))
+            ], '健康度', 'chart-anomaly-radar');
+
+            const highCost = materials.filter(m => (m.unitCost || 0) > 500).slice(0, 10);
+            if (highCost.length) createBarChart(highCost, 'name', 'unitCost', '單位成本', '#f59e0b', 'v', 'chart-anomaly-cost');
+        }
+
+        function renderInvEfficiency(container) {
+            const materials = currentData.materials || [];
+            const inventory = currentData.inventorySnapshots || [];
+
+            // 計算 KPI
+            const totalStockValue = materials.reduce((s, m) => s + m.stockQty * m.unitCost, 0);
+            const totalMonthlyUsage = materials.reduce((s, m) => s + m.monthlyUsage * m.unitCost, 0);
+            const avgTurnover = totalMonthlyUsage > 0 ? (totalStockValue / (totalMonthlyUsage / 30)).toFixed(1) : 'N/A';
+            const skuTotal = materials.length;
+            const skuActive = materials.filter(m => m.monthlyUsage > 0).length;
+            const turnoverRate = skuTotal ? (skuActive / skuTotal) : 0;
+
+            container.innerHTML = `
+                <div class="page-header"><h2>庫存效能分析</h2></div>
+                <div class="kpi-row">
+                    <div class="kpi-card">
+                        <div class="kpi-label">總庫存金額</div>
+                        <div class="kpi-value" style="color: #8b5cf6">$${(totalStockValue / 1000000).toFixed(1)}M</div>
+                        <div class="kpi-change">元</div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">平均週轉天數</div>
+                        <div class="kpi-value" style="color: #3b82f6">${avgTurnover}</div>
+                        <div class="kpi-change">天</div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">在檔 SKU</div>
+                        <div class="kpi-value" style="color: #10b981">${skuTotal}</div>
+                        <div class="kpi-change">項材料</div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">動銷率</div>
+                        <div class="kpi-value" style="color: #f59e0b">${(turnoverRate * 100).toFixed(1)}%</div>
+                        <div class="kpi-change">${skuActive} 項有消耗</div>
+                    </div>
+                </div>
+                <div class="charts-grid cols-2">
+                    <div class="chart-card"><div class="chart-title">庫存趨勢</div><div class="chart-container" id="chart-inv-trend"></div></div>
+                    <div class="chart-card"><div class="chart-title">ABC 分類</div><div class="chart-container" id="chart-inv-abc"></div></div>
+                    <div class="chart-card full-width"><div class="chart-title">材料庫存 Top 10</div><div id="chart-inv-table"></div></div>
+                </div>
+            `;
+
+            // 庫存趨勢圖
+            if (inventory.length) {
+                const snapMonths = [...new Set(inventory.map(s => s.date.slice(0, 7)))].sort();
+                const monthlyValues = snapMonths.map(m => inventory.filter(s => s.date.startsWith(m)).reduce((sum, s) => sum + s.value, 0));
+                const avgUsage = monthlyValues.length > 0 ? monthlyValues.reduce((a, b) => a + b, 0) / monthlyValues.length : 0;
+                const traces = [
+                    { x: snapMonths, y: monthlyValues.map(v => +(v / 1e6).toFixed(2)), name: '庫存金額(M)', type: 'scatter', mode: 'lines+markers', line: { color: '#3b82f6', width: 2 }, fill: 'tozeroy', fillcolor: 'rgba(59,130,246,0.15)' },
+                    { x: snapMonths, y: monthlyValues.map(() => +(avgUsage / 1e6).toFixed(2)), name: '月消耗(M)', type: 'scatter', mode: 'lines', line: { color: '#f59e0b', width: 2, dash: 'dash' } }
+                ];
+                Plotly.newPlot('chart-inv-trend', traces, {
+                    paper_bgcolor: 'rgba(0,0,0,0)',
+                    plot_bgcolor: 'rgba(0,0,0,0)',
+                    font: { color: '#94a3b8', size: 11 },
+                    margin: { t: 40, r: 20, l: 50, b: 50 },
+                    xaxis: { gridcolor: 'rgba(255,255,255,0.06)', color: '#94a3b8' },
+                    yaxis: { gridcolor: 'rgba(255,255,255,0.06)', color: '#94a3b8' },
+                    showlegend: true,
+                    legend: { font: { color: '#94a3b8', size: 10 } }
+                }, { responsive: true });
+            }
+
+            // ABC 分類甜甜圈圖
+            const abcData = ['A', 'B', 'C'].map(c => materials.filter(m => m.abcClass === c).reduce((s, m) => s + m.stockQty * m.unitCost, 0));
+            createDoughnutChart(abcData, null, null, 'ABC 分類 (庫存金額)', 'chart-inv-abc');
+
+            // Top 10 明細表
+            const top10 = [...materials].sort((a, b) => (b.stockQty * b.unitCost) - (a.stockQty * a.unitCost)).slice(0, 10);
+            const tableHtml = `<table class="data-table">
+                <thead><tr><th>物料</th><th>類別</th><th>ABC</th><th>單價</th><th>庫存量</th><th>庫存金額</th><th>在庫天數</th></tr></thead>
+                <tbody>${top10.map(m => `
+                    <tr>
+                        <td>${m.name}</td>
+                        <td>${m.category}</td>
+                        <td><span class="status-badge badge-${m.abcClass === 'A' ? 'danger' : m.abcClass === 'B' ? 'warning' : 'info'}">${m.abcClass}</span></td>
+                        <td>$${m.unitCost.toFixed(0)}</td>
+                        <td>${m.stockQty.toLocaleString()}</td>
+                        <td>$${(m.stockQty * m.unitCost / 1000000).toFixed(2)}M</td>
+                        <td>${m.daysInStock}</td>
+                    </tr>`).join('')}
+                </tbody>
+            </table>`;
+            document.getElementById('chart-inv-table').innerHTML = tableHtml;
+        }
+
+        function renderInvRisk(container) {
+            const materials = currentData.materials || [];
+
+            const stale = materials.filter(m => m.daysInStock > 90);
+            const staleValue = stale.reduce((s, m) => s + m.stockQty * m.unitCost, 0);
+            const totalValue = materials.reduce((s, m) => s + m.stockQty * m.unitCost, 0);
+            const specialCount = materials.filter(m => m.type === '專用料').length;
+            const generalCount = materials.filter(m => m.type === '通用料').length;
+            const auxCount = materials.filter(m => m.type === '輔料' || m.type === '非生產用料').length;
+
+            container.innerHTML = `
+                <div class="page-header"><h2>呆滯與風險分析</h2></div>
+                <div class="kpi-row">
+                    <div class="kpi-card">
+                        <div class="kpi-label">超期庫存金額 (>90天)</div>
+                        <div class="kpi-value" style="color: #ef4444">$${(staleValue / 1000000).toFixed(1)}M</div>
+                        <div class="kpi-change">佔比 ${totalValue > 0 ? (staleValue / totalValue * 100).toFixed(1) : 0}%</div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">超期物料數</div>
+                        <div class="kpi-value" style="color: #f59e0b">${stale.length}</div>
+                        <div class="kpi-change">項</div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">專用料</div>
+                        <div class="kpi-value" style="color: #3b82f6">${specialCount}</div>
+                        <div class="kpi-change">項</div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">通用料</div>
+                        <div class="kpi-value" style="color: #10b981">${generalCount}</div>
+                        <div class="kpi-change">項</div>
+                    </div>
+                </div>
+                <div class="charts-grid cols-2">
+                    <div class="chart-card"><div class="chart-title">庫齡分布</div><div class="chart-container" id="chart-risk-waterfall"></div></div>
+                    <div class="chart-card"><div class="chart-title">物料類型分布</div><div class="chart-container" id="chart-risk-type"></div></div>
+                    <div class="chart-card full-width"><div class="chart-title">消耗率 (月消耗/庫存)</div><div class="chart-container" id="chart-risk-consume"></div></div>
+                </div>
+            `;
+
+            // 庫齡瀑布圖
+            const ageBuckets = [
+                { label: '0-30天', count: materials.filter(m => m.daysInStock <= 30).reduce((s, m) => s + m.stockQty * m.unitCost, 0) },
+                { label: '31-60天', count: materials.filter(m => m.daysInStock > 30 && m.daysInStock <= 60).reduce((s, m) => s + m.stockQty * m.unitCost, 0) },
+                { label: '61-90天', count: materials.filter(m => m.daysInStock > 60 && m.daysInStock <= 90).reduce((s, m) => s + m.stockQty * m.unitCost, 0) },
+                { label: '91-180天', count: materials.filter(m => m.daysInStock > 90 && m.daysInStock <= 180).reduce((s, m) => s + m.stockQty * m.unitCost, 0) },
+                { label: '>180天', count: materials.filter(m => m.daysInStock > 180).reduce((s, m) => s + m.stockQty * m.unitCost, 0) },
+            ];
+            const bucketColors = ['#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#dc2626'];
+            Plotly.newPlot('chart-risk-waterfall', [{
+                x: ageBuckets.map(b => b.label),
+                y: ageBuckets.map(b => b.count),
+                type: 'bar',
+                marker: { color: bucketColors },
+                text: ageBuckets.map(b => (b.count / 1000000).toFixed(1) + 'M'),
+                textposition: 'outside',
+                textfont: { color: '#94a3b8', size: 10 }
+            }], {
+                title: { text: '庫存金額', font: { size: 14, color: '#94a3b8' } },
+                paper_bgcolor: 'rgba(0,0,0,0)',
+                plot_bgcolor: 'rgba(0,0,0,0)',
+                font: { color: '#94a3b8', size: 11 },
+                margin: { t: 40, r: 20, l: 50, b: 50 },
+                xaxis: { gridcolor: 'rgba(255,255,255,0.06)', color: '#94a3b8' },
+                yaxis: { gridcolor: 'rgba(255,255,255,0.06)', color: '#94a3b8', title: '金額' },
+                showlegend: false
+            }, { responsive: true });
+
+            // 類型甜甜圈圖
+            createDoughnutChart([['專用料', specialCount], ['通用料', generalCount], ['輔料/非生產', auxCount]], null, null, '物料類型', 'chart-risk-type');
+
+            // 消耗率（水平長條圖）
+            const consumeData = materials.map(m => ({ name: m.name, rate: m.stockQty > 0 ? m.monthlyUsage / m.stockQty : 0 })).sort((a, b) => a.rate - b.rate).slice(0, 8);
+            Plotly.newPlot('chart-risk-consume', [{
+                y: consumeData.map(c => c.name),
+                x: consumeData.map(c => +(c.rate * 100).toFixed(1)),
+                type: 'bar',
+                orientation: 'h',
+                marker: { color: '#3b82f6' },
+                text: consumeData.map(c => +(c.rate * 100).toFixed(1) + '%'),
+                textposition: 'outside',
+                textfont: { color: '#94a3b8', size: 10 }
+            }], {
+                title: { text: '月消耗率 (%)', font: { size: 14, color: '#94a3b8' } },
+                paper_bgcolor: 'rgba(0,0,0,0)',
+                plot_bgcolor: 'rgba(0,0,0,0)',
+                font: { color: '#94a3b8', size: 11 },
+                margin: { t: 40, r: 60, l: 100, b: 50 },
+                xaxis: { gridcolor: 'rgba(255,255,255,0.06)', color: '#94a3b8', title: '%' },
+                yaxis: { gridcolor: 'rgba(255,255,255,0.06)', color: '#94a3b8' },
+                showlegend: false
+            }, { responsive: true });
+        }
+
+        function renderSupPrice(container) {
+            const pos = filterByDate(currentData.purchaseOrders || []);
+            const suppliers = currentData.suppliers || [];
+
+            const totalPurchase = pos.reduce((s, p) => s + p.totalAmount, 0);
+            const supplierCount = new Set(pos.map(p => p.supplierId)).size;
+            const avgPrice = pos.length ? totalPurchase / pos.reduce((s, p) => s + p.qty, 0) : 0;
+
+            container.innerHTML = `
+                <div class="page-header"><h2>價格與降本分析</h2></div>
+                <div class="kpi-row">
+                    <div class="kpi-card">
+                        <div class="kpi-label">總採購金額</div>
+                        <div class="kpi-value" style="color: #8b5cf6">$${(totalPurchase / 1000000).toFixed(1)}M</div>
+                        <div class="kpi-change">元</div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">供應商數</div>
+                        <div class="kpi-value" style="color: #3b82f6">${supplierCount}</div>
+                        <div class="kpi-change">家</div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">平均採購單價</div>
+                        <div class="kpi-value" style="color: #0ea5e9">$${avgPrice.toFixed(0)}</div>
+                        <div class="kpi-change">元/單位</div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">訂單數</div>
+                        <div class="kpi-value" style="color: #10b981">${pos.length}</div>
+                        <div class="kpi-change">筆</div>
+                    </div>
+                </div>
+                <div class="charts-grid cols-2">
+                    <div class="chart-card full-width"><div class="chart-title">供應商採購帕雷托圖</div><div class="chart-container" id="chart-sup-pareto"></div></div>
+                    <div class="chart-card"><div class="chart-title">採購類別分布</div><div class="chart-container" id="chart-sup-category"></div></div>
+                </div>
+            `;
+
+            // 帕雷托圖（長條 + 線圖）
+            const supAmounts = {};
+            pos.forEach(p => { supAmounts[p.supplierName] = (supAmounts[p.supplierName] || 0) + p.totalAmount; });
+            const sorted = Object.entries(supAmounts).sort((a, b) => b[1] - a[1]);
+            const labels = sorted.map(s => s[0]);
+            const amounts = sorted.map(s => s[1]);
+            let cumSum = 0;
+            const cumPct = amounts.map(a => { cumSum += a; return +(cumSum / totalPurchase * 100).toFixed(1); });
+
+            const trace1 = {
+                x: labels,
+                y: amounts.map(a => +(a / 1e3).toFixed(1)),
+                name: '採購金額 (k)',
+                type: 'bar',
+                marker: { color: '#3b82f6' },
+                yaxis: 'y'
+            };
+            const trace2 = {
+                x: labels,
+                y: cumPct,
+                name: '累計佔比 (%)',
+                type: 'scatter',
+                mode: 'lines+markers',
+                line: { color: '#f59e0b', width: 2 },
+                marker: { size: 6 },
+                yaxis: 'y2'
+            };
+            Plotly.newPlot('chart-sup-pareto', [trace1, trace2], {
+                title: { text: '供應商採購金額排名', font: { size: 14, color: '#94a3b8' } },
+                paper_bgcolor: 'rgba(0,0,0,0)',
+                plot_bgcolor: 'rgba(0,0,0,0)',
+                font: { color: '#94a3b8', size: 11 },
+                margin: { t: 40, r: 60, l: 60, b: 80 },
+                xaxis: { gridcolor: 'rgba(255,255,255,0.06)', color: '#94a3b8', tickangle: -30 },
+                yaxis: { title: '金額 (k)', gridcolor: 'rgba(255,255,255,0.06)', color: '#94a3b8', side: 'left' },
+                yaxis2: { title: '累計 %', gridcolor: 'rgba(255,255,255,0.06)', color: '#f59e0b', side: 'right', overlaying: 'y', min: 0, max: 100 },
+                showlegend: true,
+                legend: { font: { color: '#94a3b8', size: 10 } }
+            }, { responsive: true });
+
+            // 類別甜甜圈圖
+            const catAmounts = {};
+            pos.forEach(p => {
+                const sup = suppliers.find(s => s.id === p.supplierId);
+                const cat = sup ? sup.category : '其他';
+                catAmounts[cat] = (catAmounts[cat] || 0) + p.totalAmount;
+            });
+            const catData = Object.entries(catAmounts);
+            createDoughnutChart(catData, null, null, '採購類別', 'chart-sup-category');
+        }
+
+        function renderSupTime(container) {
+            const pos = filterByDate(currentData.purchaseOrders || []);
+
+            const totalOrders = pos.length;
+            const lateOrders = pos.filter(p => p.delayDays > 0);
+            const lateRate = totalOrders ? lateOrders.length / totalOrders : 0;
+            const avgDelay = lateOrders.length ? lateOrders.reduce((s, p) => s + p.delayDays, 0) / lateOrders.length : 0;
+            const avgLead = totalOrders ? pos.reduce((s, p) => s + p.actualLeadTime, 0) / totalOrders : 0;
+
+            container.innerHTML = `
+                <div class="page-header"><h2>採購時效與交期</h2></div>
+                <div class="kpi-row">
+                    <div class="kpi-card">
+                        <div class="kpi-label">總訂單數</div>
+                        <div class="kpi-value" style="color: #3b82f6">${totalOrders}</div>
+                        <div class="kpi-change">筆</div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">遲交率</div>
+                        <div class="kpi-value" style="color: #ef4444">${(lateRate * 100).toFixed(1)}%</div>
+                        <div class="kpi-change">${lateOrders.length} 筆遲交</div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">平均遲交天數</div>
+                        <div class="kpi-value" style="color: #f59e0b">${avgDelay.toFixed(1)}</div>
+                        <div class="kpi-change">天</div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">平均採購周期</div>
+                        <div class="kpi-value" style="color: #0ea5e9">${avgLead.toFixed(1)}</div>
+                        <div class="kpi-change">天</div>
+                    </div>
+                </div>
+                <div class="charts-grid cols-2">
+                    <div class="chart-card"><div class="chart-title">採購數量 vs 遲交天數</div><div class="chart-container" id="chart-sup-scatter"></div></div>
+                    <div class="chart-card"><div class="chart-title">遲交 Top 供應商</div><div class="chart-container" id="chart-sup-delay"></div></div>
+                    <div class="chart-card full-width"><div class="chart-title">月度準交率趨勢</div><div class="chart-container" id="chart-sup-ontime"></div></div>
+                </div>
+            `;
+
+            // 散佈圖
+            const scatterData = {};
+            pos.forEach(p => {
+                if (!scatterData[p.supplierName]) scatterData[p.supplierName] = [];
+                scatterData[p.supplierName].push({ x: p.qty, y: p.delayDays });
+            });
+            const colors = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#0ea5e9', '#ec4899', '#14b8a6'];
+            const scatterTraces = Object.entries(scatterData).slice(0, 8).map(([name, data], i) => ({
+                x: data.map(d => d.x),
+                y: data.map(d => d.y),
+                mode: 'markers',
+                type: 'scatter',
+                name: name,
+                marker: { size: 10, color: colors[i % colors.length], opacity: 0.7 }
+            }));
+            Plotly.newPlot('chart-sup-scatter', scatterTraces, {
+                title: { text: '數量 vs 遲交天數', font: { size: 14, color: '#94a3b8' } },
+                paper_bgcolor: 'rgba(0,0,0,0)',
+                plot_bgcolor: 'rgba(0,0,0,0)',
+                font: { color: '#94a3b8', size: 11 },
+                margin: { t: 40, r: 20, l: 50, b: 50 },
+                xaxis: { title: '採購數量', gridcolor: 'rgba(255,255,255,0.06)', color: '#94a3b8' },
+                yaxis: { title: '遲交天數', gridcolor: 'rgba(255,255,255,0.06)', color: '#94a3b8' },
+                showlegend: true,
+                legend: { font: { color: '#94a3b8', size: 10 } }
+            }, { responsive: true });
+
+            // 遲交 Top 供應商（水平長條圖）
+            const delayBySup = {};
+            lateOrders.forEach(p => { delayBySup[p.supplierName] = (delayBySup[p.supplierName] || 0) + p.delayDays; });
+            const topDelay = Object.entries(delayBySup).sort((a, b) => b[1] - a[1]).slice(0, 8);
+            const delayColors = topDelay.map((_, i) => i < 3 ? '#ef4444' : '#f59e0b');
+            Plotly.newPlot('chart-sup-delay', [{
+                y: topDelay.map(d => d[0]),
+                x: topDelay.map(d => d[1]),
+                type: 'bar',
+                orientation: 'h',
+                marker: { color: delayColors },
+                text: topDelay.map(d => d[1] + ' 天'),
+                textposition: 'outside',
+                textfont: { color: '#94a3b8', size: 10 }
+            }], {
+                title: { text: '累計遲交天數', font: { size: 14, color: '#94a3b8' } },
+                paper_bgcolor: 'rgba(0,0,0,0)',
+                plot_bgcolor: 'rgba(0,0,0,0)',
+                font: { color: '#94a3b8', size: 11 },
+                margin: { t: 40, r: 60, l: 100, b: 50 },
+                xaxis: { gridcolor: 'rgba(255,255,255,0.06)', color: '#94a3b8', title: '天數' },
+                yaxis: { gridcolor: 'rgba(255,255,255,0.06)', color: '#94a3b8' },
+                showlegend: false
+            }, { responsive: true });
+
+            // 月度準交率趨勢
+            const months = [...new Set(pos.map(p => p.date.slice(0, 7)))].sort();
+            const onTimeByMonth = months.map(m => {
+                const mp = pos.filter(p => p.date.startsWith(m));
+                return mp.length ? +(mp.filter(p => p.delayDays === 0).length / mp.length * 100).toFixed(1) : 0;
+            });
+            Plotly.newPlot('chart-sup-ontime', [{
+                x: months,
+                y: onTimeByMonth,
+                type: 'scatter',
+                mode: 'lines+markers',
+                name: '準交率 (%)',
+                line: { color: '#10b981', width: 2 },
+                fill: 'tozeroy',
+                fillcolor: 'rgba(16,185,129,0.15)'
+            }], {
+                title: { text: '月度準交率 (%)', font: { size: 14, color: '#94a3b8' } },
+                paper_bgcolor: 'rgba(0,0,0,0)',
+                plot_bgcolor: 'rgba(0,0,0,0)',
+                font: { color: '#94a3b8', size: 11 },
+                margin: { t: 40, r: 20, l: 50, b: 50 },
+                xaxis: { gridcolor: 'rgba(255,255,255,0.06)', color: '#94a3b8' },
+                yaxis: { gridcolor: 'rgba(255,255,255,0.06)', color: '#94a3b8', min: 0, max: 100, title: '%' },
+                showlegend: false
+            }, { responsive: true });
+        }
+
+        function renderSupPerf(container) {
+            const suppliers = currentData.suppliers || [];
+
+            const preferred = suppliers.filter(s => s.tier === 'Preferred').length;
+            const approved = suppliers.filter(s => s.tier === 'Approved').length;
+            const atRisk = suppliers.filter(s => s.tier === 'At-Risk').length;
+            const sorted = [...suppliers].sort((a, b) => b.compositeScore - a.compositeScore);
+
+            container.innerHTML = `
+                <div class="page-header"><h2>供應商評分卡</h2></div>
+                <div class="kpi-row">
+                    <div class="kpi-card">
+                        <div class="kpi-label">Preferred</div>
+                        <div class="kpi-value" style="color: #10b981">${preferred}</div>
+                        <div class="kpi-change">家</div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">Approved</div>
+                        <div class="kpi-value" style="color: #f59e0b">${approved}</div>
+                        <div class="kpi-change">家</div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">At-Risk</div>
+                        <div class="kpi-value" style="color: #ef4444">${atRisk}</div>
+                        <div class="kpi-change">家</div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">供應商總數</div>
+                        <div class="kpi-value" style="color: #3b82f6">${suppliers.length}</div>
+                        <div class="kpi-change">家</div>
+                    </div>
+                </div>
+                <div class="charts-grid cols-2">
+                    <div class="chart-card"><div class="chart-title">評分卡雷達圖</div><div class="chart-container" id="chart-sup-radar"></div></div>
+                    <div class="chart-card full-width"><div class="chart-title">供應商評分明細</div><div id="table-sup-scorecard"></div></div>
+                </div>
+            `;
+
+            // 雷達圖 - 預設顯示第一名
+            if (sorted.length > 0) {
+                const sup = sorted[0];
+                createRadarChart(['評分', '交期', '品質', '服務', '技術'],
+                    [sup.rating, Math.round(sup.onTimeDeliveryRate * 100), sup.qualityScore, sup.serviceScore, sup.techScore],
+                    sup.name, 'chart-sup-radar');
+            }
+
+            // 評分明細表
+            const tableHtml = `<table class="data-table">
+                <thead><tr><th>供應商</th><th>類別</th><th>綜合分</th><th>交期</th><th>品質</th><th>服務</th><th>Tier</th></tr></thead>
+                <tbody>${sorted.map(s => `
+                    <tr class="clickable" onmouseover="showSupplierRadar('${s.id}')">
+                        <td>${s.name}</td>
+                        <td>${s.category}</td>
+                        <td><b>${s.compositeScore}</b></td>
+                        <td>${(s.onTimeDeliveryRate * 100).toFixed(0)}%</td>
+                        <td>${s.qualityScore}</td>
+                        <td>${s.serviceScore}</td>
+                        <td><span class="status-badge badge-${s.tier === 'Preferred' ? 'success' : s.tier === 'Approved' ? 'warning' : 'danger'}">${s.tier}</span></td>
+                    </tr>`).join('')}
+                </tbody>
+            </table>`;
+            document.getElementById('table-sup-scorecard').innerHTML = tableHtml;
+        }
+
+        // 顯示供應商雷達圖（供滑鼠移過時呼叫）
+        window.showSupplierRadar = function(supplierId) {
+            const suppliers = currentData.suppliers || [];
+            const sup = suppliers.find(s => s.id === supplierId);
+            if (sup) {
+                createRadarChart(['評分', '交期', '品質', '服務', '技術'],
+                    [sup.rating, Math.round(sup.onTimeDeliveryRate * 100), sup.qualityScore, sup.serviceScore, sup.techScore],
+                    sup.name, 'chart-sup-radar');
+            }
+        };
+
+        function renderCostBom(container) {
+            const products = currentData.products || [];
+            const materials = currentData.materials || [];
+
+            if (!products.length) return;
+
+            const totalProducts = products.length;
+            const totalBomItems = products.reduce((s, p) => s + (p.bom?.length || 0), 0);
+            const avgBomDepth = (totalBomItems / totalProducts).toFixed(1);
+
+            container.innerHTML = `
+                <div class="page-header"><h2>BOM 結構解析</h2></div>
+                <div class="kpi-row">
+                    <div class="kpi-card">
+                        <div class="kpi-label">成品種類</div>
+                        <div class="kpi-value" style="color: #3b82f6">${totalProducts}</div>
+                        <div class="kpi-change">種</div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">BOM 項目總數</div>
+                        <div class="kpi-value" style="color: #8b5cf6">${totalBomItems}</div>
+                        <div class="kpi-change">項</div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">平均 BOM 深度</div>
+                        <div class="kpi-value" style="color: #10b981">${avgBomDepth}</div>
+                        <div class="kpi-change">層</div>
+                    </div>
+                </div>
+                <div class="charts-grid cols-1">
+                    <div class="chart-card full-width"><div class="chart-title">BOM 成本分解 (材料/人工/製費)</div><div class="chart-container" id="chart-bom-cost"></div></div>
+                </div>
+            `;
+
+            // 堆疊長條圖
+            const prodLabels = products.map(p => p.name);
+            const matCosts = products.map(p => p.bom.reduce((s, b) => {
+                const m = materials.find(x => x.id === b.matId);
+                return s + (m ? m.unitCost * b.qty : 0);
+            }, 0));
+            const laborCosts = products.map(p => (p.stdLaborHrs || 0) * 250);
+            const ohCosts = products.map(p => (p.stdMachHrs || 0) * 400);
+
+            const traces = [
+                { x: prodLabels, y: matCosts, name: '直接材料', type: 'bar', marker: { color: '#3b82f6' }, stackgroup: 'one' },
+                { x: prodLabels, y: laborCosts, name: '直接人工', type: 'bar', marker: { color: '#10b981' }, stackgroup: 'one' },
+                { x: prodLabels, y: ohCosts, name: '製造費用', type: 'bar', marker: { color: '#f59e0b' }, stackgroup: 'one' }
+            ];
+            Plotly.newPlot('chart-bom-cost', traces, {
+                title: { text: '產品成本組成', font: { size: 14, color: '#94a3b8' } },
+                paper_bgcolor: 'rgba(0,0,0,0)',
+                plot_bgcolor: 'rgba(0,0,0,0)',
+                font: { color: '#94a3b8', size: 11 },
+                margin: { t: 40, r: 20, l: 50, b: 80 },
+                xaxis: { gridcolor: 'rgba(255,255,255,0.06)', color: '#94a3b8', tickangle: -30 },
+                yaxis: { gridcolor: 'rgba(255,255,255,0.06)', color: '#94a3b8', title: '成本 ($)' },
+                showlegend: true,
+                legend: { font: { color: '#94a3b8', size: 10 } }
+            }, { responsive: true });
+        }
+
+        function renderCostYield(container) {
+            const production = filterByDate(currentData.productionOrders || []);
+
+            const avgYield = production.length ? production.reduce((s, p) => s + p.yieldRate, 0) / production.length : 0;
+            const totalInput = production.reduce((s, p) => s + p.inputQty, 0);
+            const totalGood = production.reduce((s, p) => s + p.goodOutput, 0);
+            const totalDefect = production.reduce((s, p) => s + p.defectQty, 0);
+
+            container.innerHTML = `
+                <div class="page-header"><h2>生產數據與良率</h2></div>
+                <div class="kpi-row">
+                    <div class="kpi-card">
+                        <div class="kpi-label">平均良率</div>
+                        <div class="kpi-value" style="color: #10b981">${(avgYield * 100).toFixed(1)}%</div>
+                        <div class="kpi-change">目標 97%</div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">總投入量</div>
+                        <div class="kpi-value" style="color: #3b82f6">${totalInput.toLocaleString()}</div>
+                        <div class="kpi-change">件</div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">良品數</div>
+                        <div class="kpi-value" style="color: #0ea5e9">${totalGood.toLocaleString()}</div>
+                        <div class="kpi-change">件</div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">不良品數</div>
+                        <div class="kpi-value" style="color: #ef4444">${totalDefect.toLocaleString()}</div>
+                        <div class="kpi-change">件</div>
+                    </div>
+                </div>
+                <div class="charts-grid cols-2">
+                    <div class="chart-card"><div class="chart-title">良率趨勢 vs 目標</div><div class="chart-container" id="chart-yield-line"></div></div>
+                    <div class="chart-card"><div class="chart-title">各產線良率</div><div class="chart-container" id="chart-yield-avg"></div></div>
+                    <div class="chart-card full-width"><div class="chart-title">良率熱力圖 (產品 x 產線)</div><div id="table-yield-heatmap"></div></div>
+                </div>
+            `;
+
+            // 良率趨勢線圖
+            const months = [...new Set(production.map(p => p.month))].sort();
+            const yieldByMonth = months.map(m => {
+                const mp = production.filter(p => p.month === m);
+                return mp.length ? +(mp.reduce((s, p) => s + p.yieldRate, 0) / mp.length * 100).toFixed(1) : 0;
+            });
+
+            const trace1 = {
+                x: months,
+                y: yieldByMonth,
+                type: 'scatter',
+                mode: 'lines+markers',
+                name: '良率 (%)',
+                line: { color: '#10b981', width: 2 },
+                fill: 'tozeroy',
+                fillcolor: 'rgba(16,185,129,0.15)'
+            };
+            const trace2 = {
+                x: months,
+                y: months.map(() => 97),
+                type: 'scatter',
+                mode: 'lines',
+                name: '目標 (97%)',
+                line: { color: '#ef4444', width: 2, dash: 'dash' }
+            };
+            Plotly.newPlot('chart-yield-line', [trace1, trace2], {
+                paper_bgcolor: 'rgba(0,0,0,0)',
+                plot_bgcolor: 'rgba(0,0,0,0)',
+                font: { color: '#94a3b8', size: 11 },
+                margin: { t: 40, r: 20, l: 50, b: 50 },
+                xaxis: { gridcolor: 'rgba(255,255,255,0.06)', color: '#94a3b8' },
+                yaxis: { gridcolor: 'rgba(255,255,255,0.06)', color: '#94a3b8', min: 90, max: 100, title: '%' },
+                showlegend: true,
+                legend: { font: { color: '#94a3b8', size: 10 } }
+            }, { responsive: true });
+
+            // 各產線良率
+            const lines = [...new Set(production.map(p => p.line))];
+            const lineYields = lines.map(l => {
+                const lp = production.filter(p => p.line === l);
+                return lp.length ? +(lp.reduce((s, p) => s + p.yieldRate, 0) / lp.length * 100).toFixed(1) : 0;
+            });
+            const lineColors = lineYields.map(v => v >= 97 ? '#10b981' : v >= 95 ? '#f59e0b' : '#ef4444');
+            Plotly.newPlot('chart-yield-avg', [{
+                x: lines,
+                y: lineYields,
+                type: 'bar',
+                marker: { color: lineColors },
+                text: lineYields.map(v => v + '%'),
+                textposition: 'outside',
+                textfont: { color: '#94a3b8', size: 10 }
+            }], {
+                title: { text: '良率 (%)', font: { size: 14, color: '#94a3b8' } },
+                paper_bgcolor: 'rgba(0,0,0,0)',
+                plot_bgcolor: 'rgba(0,0,0,0)',
+                font: { color: '#94a3b8', size: 11 },
+                margin: { t: 40, r: 20, l: 50, b: 50 },
+                xaxis: { gridcolor: 'rgba(255,255,255,0.06)', color: '#94a3b8' },
+                yaxis: { gridcolor: 'rgba(255,255,255,0.06)', color: '#94a3b8', min: 90, max: 100, title: '%' },
+                showlegend: false
+            }, { responsive: true });
+
+            // 良率熱力圖
+            const products = [...new Set(production.map(p => p.productName))];
+            let heatHtml = `<table class="data-table">
+                <thead><tr><th>產品 \\ 產線</th>${lines.map(l => `<th>${l}</th>`).join('')}</tr></thead>
+                <tbody>`;
+            products.forEach(prod => {
+                heatHtml += `<tr><td>${prod}</td>`;
+                lines.forEach(line => {
+                    const cells = production.filter(p => p.productName === prod && p.line === line);
+                    const val = cells.length ? (cells.reduce((s, p) => s + p.yieldRate, 0) / cells.length * 100).toFixed(1) : '-';
+                    const bgColor = val === '-' ? 'transparent' : val >= 97 ? 'rgba(16,185,129,0.3)' : val >= 95 ? 'rgba(245,158,11,0.3)' : 'rgba(239,68,68,0.3)';
+                    heatHtml += `<td class="heatmap-cell" style="background:${bgColor}">${val}%</td>`;
+                });
+                heatHtml += '</tr>';
+            });
+            heatHtml += '</tbody></table>';
+            document.getElementById('table-yield-heatmap').innerHTML = heatHtml;
+        }
+
+        function renderCostStruct(container) {
+            const production = filterByDate(currentData.productionOrders || []);
+
+            const totalActCost = production.reduce((s, p) => s + p.actTotalCost * p.goodOutput, 0);
+            const totalMat = production.reduce((s, p) => s + p.actMaterialCost * p.goodOutput, 0);
+            const totalLabor = production.reduce((s, p) => s + p.actLaborCost * p.goodOutput, 0);
+            const totalOH = production.reduce((s, p) => s + p.actOverheadCost * p.goodOutput, 0);
+
+            container.innerHTML = `
+                <div class="page-header"><h2>成本組成結構</h2></div>
+                <div class="kpi-row">
+                    <div class="kpi-card">
+                        <div class="kpi-label">總製造成本</div>
+                        <div class="kpi-value" style="color: #8b5cf6">$${(totalActCost / 1000000).toFixed(1)}M</div>
+                        <div class="kpi-change">元</div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">直接材料佔比</div>
+                        <div class="kpi-value" style="color: #3b82f6">${totalActCost > 0 ? (totalMat / totalActCost * 100).toFixed(1) : 0}%</div>
+                        <div class="kpi-change">材料</div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">直接人工佔比</div>
+                        <div class="kpi-value" style="color: #10b981">${totalActCost > 0 ? (totalLabor / totalActCost * 100).toFixed(1) : 0}%</div>
+                        <div class="kpi-change">人工</div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">製造費用佔比</div>
+                        <div class="kpi-value" style="color: #f59e0b">${totalActCost > 0 ? (totalOH / totalActCost * 100).toFixed(1) : 0}%</div>
+                        <div class="kpi-change">製費</div>
+                    </div>
+                </div>
+                <div class="charts-grid cols-2">
+                    <div class="chart-card full-width"><div class="chart-title">成本趨勢 (料工費堆疊)</div><div class="chart-container" id="chart-cost-trend"></div></div>
+                    <div class="chart-card"><div class="chart-title">成本組成比例</div><div class="chart-container" id="chart-cost-pie"></div></div>
+                </div>
+            `;
+
+            // 堆疊趨勢圖
+            const months = [...new Set(production.map(p => p.month))].sort();
+            const matByMonth = months.map(m => production.filter(p => p.month === m).reduce((s, p) => s + p.actMaterialCost * p.goodOutput, 0));
+            const labByMonth = months.map(m => production.filter(p => p.month === m).reduce((s, p) => s + p.actLaborCost * p.goodOutput, 0));
+            const ohByMonth = months.map(m => production.filter(p => p.month === m).reduce((s, p) => s + p.actOverheadCost * p.goodOutput, 0));
+
+            const traces = [
+                { x: months, y: matByMonth.map(v => +(v / 1e6).toFixed(2)), name: '直接材料', type: 'scatter', mode: 'lines', fill: 'tonexty', fillcolor: 'rgba(59,130,246,0.3)', line: { color: '#3b82f6', width: 2 } },
+                { x: months, y: labByMonth.map(v => +(v / 1e6).toFixed(2)), name: '直接人工', type: 'scatter', mode: 'lines', fill: 'tonexty', fillcolor: 'rgba(16,185,129,0.3)', line: { color: '#10b981', width: 2 } },
+                { x: months, y: ohByMonth.map(v => +(v / 1e6).toFixed(2)), name: '製造費用', type: 'scatter', mode: 'lines', fill: 'tonexty', fillcolor: 'rgba(245,158,11,0.3)', line: { color: '#f59e0b', width: 2 } }
+            ];
+            Plotly.newPlot('chart-cost-trend', traces, {
+                title: { text: '成本趨勢 (百萬元)', font: { size: 14, color: '#94a3b8' } },
+                paper_bgcolor: 'rgba(0,0,0,0)',
+                plot_bgcolor: 'rgba(0,0,0,0)',
+                font: { color: '#94a3b8', size: 11 },
+                margin: { t: 40, r: 20, l: 50, b: 50 },
+                xaxis: { gridcolor: 'rgba(255,255,255,0.06)', color: '#94a3b8' },
+                yaxis: { gridcolor: 'rgba(255,255,255,0.06)', color: '#94a3b8', title: '百萬元' },
+                showlegend: true,
+                legend: { font: { color: '#94a3b8', size: 10 } }
+            }, { responsive: true });
+
+            // 成本組成甜甜圈圖
+            createDoughnutChart([['直接材料', totalMat], ['直接人工', totalLabor], ['製造費用', totalOH]], null, null, '成本組成', 'chart-cost-pie');
+        }
+
+        function renderCostVar(container) {
+            const production = filterByDate(currentData.productionOrders || []);
+
+            const totalMatVar = production.reduce((s, p) => s + p.materialVar * p.goodOutput, 0);
+            const totalLabVar = production.reduce((s, p) => s + p.laborVar * p.goodOutput, 0);
+            const totalOHVar = production.reduce((s, p) => s + p.overheadVar * p.goodOutput, 0);
+            const totalVar = totalMatVar + totalLabVar + totalOHVar;
+            const totalStd = production.reduce((s, p) => s + p.stdTotalCost * p.goodOutput, 0);
+
+            const isOver = totalVar > 0;
+
+            container.innerHTML = `
+                <div class="page-header"><h2>成本差異追蹤</h2></div>
+                <div class="kpi-row">
+                    <div class="kpi-card">
+                        <div class="kpi-label">總成本差異</div>
+                        <div class="kpi-value" style="color: ${isOver ? '#ef4444' : '#10b981'}">${isOver ? '+' : ''}$${(totalVar / 1000).toFixed(0)}k</div>
+                        <div class="kpi-change">${isOver ? '超支' : '節約'} ${totalStd > 0 ? (Math.abs(totalVar) / totalStd * 100).toFixed(1) : 0}%</div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">材料差異</div>
+                        <div class="kpi-value" style="color: #0ea5e9">$${(totalMatVar / 1000).toFixed(0)}k</div>
+                        <div class="kpi-change">${totalMatVar > 0 ? '超支' : '節約'}</div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">人工差異</div>
+                        <div class="kpi-value" style="color: #f59e0b">$${(totalLabVar / 1000).toFixed(0)}k</div>
+                        <div class="kpi-change">${totalLabVar > 0 ? '超支' : '節約'}</div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">製費差異</div>
+                        <div class="kpi-value" style="color: #8b5cf6">$${(totalOHVar / 1000).toFixed(0)}k</div>
+                        <div class="kpi-change">${totalOHVar > 0 ? '超支' : '節約'}</div>
+                    </div>
+                </div>
+                <div class="charts-grid cols-1">
+                    <div class="chart-card full-width"><div class="chart-title">成本差異瀑布圖</div><div class="chart-container" id="chart-cost-waterfall"></div></div>
+                </div>
+                <div class="charts-grid cols-1">
+                    <div class="chart-card full-width"><div class="chart-title">異常工單明細 (差異率 > 2%)</div><div id="table-cost-abnormal"></div></div>
+                </div>
+            `;
+
+            // 瀑布圖
+            createWaterfallChart(['材料差異', '人工差異', '製費差異', '總差異'], [totalMatVar, totalLabVar, totalOHVar, totalVar], '', 'chart-cost-waterfall');
+
+            // 異常工單表
+            const abnormals = production.map(p => ({
+                ...p,
+                totalVar: p.materialVar + p.laborVar + p.overheadVar,
+                varRate: p.stdTotalCost ? Math.abs(p.materialVar + p.laborVar + p.overheadVar) / p.stdTotalCost : 0
+            }))
+                .filter(p => p.varRate > 0.02)
+                .sort((a, b) => b.varRate - a.varRate)
+                .slice(0, 15);
+
+            const flagIcon = rate => rate >= 0.05 ? '🚩' : rate >= 0.02 ? '⚠️' : rate >= 0.01 ? '🔶' : '';
+            const tableHtml = `<table class="data-table">
+                <thead><tr><th>工單</th><th>產品</th><th>產線</th><th>材料差異</th><th>人工差異</th><th>製費差異</th><th>差異率</th><th>預警</th></tr></thead>
+                <tbody>${abnormals.map(p => `
+                    <tr>
+                        <td>${p.orderId}</td>
+                        <td>${p.productName}</td>
+                        <td>${p.line}</td>
+                        <td style="color: ${p.materialVar > 0 ? '#ef4444' : '#10b981'}">$${(p.materialVar).toFixed(0)}</td>
+                        <td style="color: ${p.laborVar > 0 ? '#ef4444' : '#10b981'}">$${(p.laborVar).toFixed(0)}</td>
+                        <td style="color: ${p.overheadVar > 0 ? '#ef4444' : '#10b981'}">$${(p.overheadVar).toFixed(0)}</td>
+                        <td>${(p.varRate * 100).toFixed(1)}%</td>
+                        <td>${flagIcon(p.varRate)}</td>
+                    </tr>`).join('')}
+                </tbody>
+            </table>`;
+            document.getElementById('table-cost-abnormal').innerHTML = tableHtml;
+        }
+
+        function renderCostRca(container) {
+            const production = filterByDate(currentData.productionOrders || []);
+            const materials = currentData.materials || [];
+            const products = currentData.products || [];
+            const suppliers = currentData.suppliers || [];
+            const dim = document.getElementById('rca-dimension')?.value || 'product';
+
+            let groupKey;
+            if (dim === 'supplier') {
+                groupKey = p => {
+                    const mat = materials.find(m => products.find(pr => pr.bom.some(b => b.matId === m.id)));
+                    return mat ? (suppliers.find(s => s.id === mat.supplierId) || {}).name || '未知' : '未知';
+                };
+            } else if (dim === 'line') {
+                groupKey = p => p.line;
+            } else {
+                groupKey = p => p.productName;
+            }
+
+            const groups = {};
+            production.forEach(p => {
+                const key = groupKey(p);
+                if (!groups[key]) groups[key] = { matVar: 0, labVar: 0, ohVar: 0, count: 0 };
+                groups[key].matVar += p.materialVar * p.goodOutput;
+                groups[key].labVar += p.laborVar * p.goodOutput;
+                groups[key].ohVar += p.overheadVar * p.goodOutput;
+                groups[key].count++;
+            });
+
+            const totalVar = production.reduce((s, p) => s + (p.materialVar + p.laborVar + p.overheadVar) * p.goodOutput, 0);
+            const dimLabel = dim === 'supplier' ? '供應商' : dim === 'line' ? '產線' : '產品';
+
+            container.innerHTML = `
+                <div class="page-header">
+                    <h2>根因分析鑽取</h2>
+                    <div class="filter-bar">
+                        <select class="filter-select" id="rca-dimension" onchange="renderCostRca(document.getElementById('tab-content'))">
+                            <option value="product" ${dim === 'product' ? 'selected' : ''}>產品維度</option>
+                            <option value="line" ${dim === 'line' ? 'selected' : ''}>產線維度</option>
+                            <option value="supplier" ${dim === 'supplier' ? 'selected' : ''}>供應商維度</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="kpi-row">
+                    <div class="kpi-card">
+                        <div class="kpi-label">總差異 (${dimLabel})</div>
+                        <div class="kpi-value" style="color: ${totalVar > 0 ? '#ef4444' : '#10b981'}">$${(totalVar / 1000).toFixed(0)}k</div>
+                        <div class="kpi-change">${totalVar > 0 ? '超支' : '節約'}</div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">分組數</div>
+                        <div class="kpi-value" style="color: #3b82f6">${Object.keys(groups).length}</div>
+                        <div class="kpi-change">個維度</div>
+                    </div>
+                </div>
+                <div class="charts-grid cols-2">
+                    <div class="chart-card full-width"><div class="chart-title">差異排名 (${dimLabel})</div><div class="chart-container" id="chart-rca-rank"></div></div>
+                    <div class="chart-card"><div class="chart-title">最大差異項分解</div><div class="chart-container" id="chart-rca-waterfall"></div></div>
+                </div>
+            `;
+
+            // 差異排名
+            const sorted = Object.entries(groups).map(([k, v]) => ({ name: k, ...v, total: v.matVar + v.labVar + v.ohVar }))
+                .sort((a, b) => Math.abs(b.total) - Math.abs(a.total));
+            const top8 = sorted.slice(0, 8);
+            Plotly.newPlot('chart-rca-rank', [{
+                y: top8.map(s => s.name),
+                x: top8.map(s => s.total),
+                type: 'bar',
+                orientation: 'h',
+                marker: { color: top8.map(s => s.total > 0 ? '#ef4444' : '#10b981') },
+                text: top8.map(s => (s.total / 1000).toFixed(0) + 'k'),
+                textposition: 'outside',
+                textfont: { color: '#94a3b8', size: 10 }
+            }], {
+                title: { text: `總差異 (${dimLabel})`, font: { size: 14, color: '#94a3b8' } },
+                paper_bgcolor: 'rgba(0,0,0,0)',
+                plot_bgcolor: 'rgba(0,0,0,0)',
+                font: { color: '#94a3b8', size: 11 },
+                margin: { t: 40, r: 60, l: 100, b: 50 },
+                xaxis: { gridcolor: 'rgba(255,255,255,0.06)', color: '#94a3b8', title: '差異 ($)' },
+                yaxis: { gridcolor: 'rgba(255,255,255,0.06)', color: '#94a3b8' },
+                showlegend: false
+            }, { responsive: true });
+
+            // 瀑布圖（最大差異項）
+            if (sorted.length) {
+                const top = sorted[0];
+                createWaterfallChart(['材料差異', '人工差異', '製費差異', '總計'], [top.matVar, top.labVar, top.ohVar, top.total], top.name, 'chart-rca-waterfall');
+            }
+        }
+
+        function renderForecast(container) {
+            container.innerHTML = `
+                <div class="page-header"><h2>滾動預測</h2></div>
+                <div class="charts-grid cols-2">
+                    <div class="chart-card full-width"><div class="chart-title">需求預測趨勢</div><div class="chart-container" id="chart-forecast-demand"></div></div>
+                </div>
+            `;
+            const ironTriangle = currentData.ironTriangle || [];
+            if (ironTriangle.length) {
+                const traces = [
+                    { x: ironTriangle.map(d => d.month), y: ironTriangle.map(d => d.inventoryScore), name: '庫存', type: 'scatter', mode: 'lines+markers', line: { color: '#3b82f6' } },
+                    { x: ironTriangle.map(d => d.month), y: ironTriangle.map(d => d.supplierScore), name: '供應商', type: 'scatter', mode: 'lines+markers', line: { color: '#10b981' } },
+                    { x: ironTriangle.map(d => d.month), y: ironTriangle.map(d => d.costScore), name: '成本', type: 'scatter', mode: 'lines+markers', line: { color: '#f59e0b' } }
+                ];
+                Plotly.newPlot('chart-forecast-demand', traces, {
+                    paper_bgcolor: 'rgba(0,0,0,0)', plot_bgcolor: 'rgba(0,0,0,0)', font: { color: '#94a3b8' }, margin: { t: 40, r: 20, l: 50, b: 40 }
+                }, { responsive: true });
+            }
+        }
+
+        function renderDaxKb(container) {
+            container.innerHTML = `
+                <div class="page-header"><h2>DAX 知識庫</h2></div>
+                <div class="charts-grid cols-1">
+                    <div class="chart-card">
+                        <div class="chart-title">常用 DAX 公式參考</div>
+                        <pre style="background: rgba(0,0,0,0.3); padding: 20px; border-radius: 8px; overflow: auto; height: 300px; color: #94a3b8; font-size: 13px;">
+// 庫存週轉率
+Inventory Turnover = DIVIDE(
+    SUM(PurchaseOrders[Quantity]),
+    AVERAGE(InventorySnapshots[StockQty])
+)
+
+// 良率計算
+Yield Rate = DIVIDE(
+    SUM(Production[GoodOutput]),
+    SUM(Production[InputQty])
+)
+
+// 採購成本
+Total Purchase Cost = SUMX(
+    PurchaseOrders,
+    PurchaseOrders[Quantity] * PurchaseOrders[UnitPrice]
+)
+
+// 供應商評分
+Supplier Score =
+    (Supplier[QualityScore] * 0.4) +
+    (Supplier[OnTimeRate] * 0.3) +
+    (Supplier[ServiceScore] * 0.3)
+
+// 庫存天數
+Days in Stock =
+    DIVIDE(
+        AVERAGE(Inventory[StockQty]),
+        SUM(Materials[MonthlyUsage])
+    ) * 30
+                        </pre>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderIronTriangle(container) {
+            const production = filterByDate(currentData.productionOrders || []);
+            const materials = currentData.materials || [];
+            const suppliers = currentData.suppliers || [];
+            const ironTriangle = currentData.ironTriangle || [];
+
+            const staleRatio = materials.filter(m => m.daysInStock > 90).length / materials.length;
+            const avgDelivery = suppliers.length ? suppliers.reduce((s, sup) => s + sup.onTimeDeliveryRate, 0) / suppliers.length : 0;
+            const totalVar = production.reduce((s, p) => s + Math.abs(p.materialVar + p.laborVar + p.overheadVar), 0);
+            const totalStd = production.reduce((s, p) => s + p.stdTotalCost, 0);
+            const costVarRate = totalStd ? totalVar / totalStd : 0;
+            const invScore = Math.round((1 - staleRatio) * 100);
+            const supScore = Math.round(avgDelivery * 100);
+            const costScore = Math.round((1 - costVarRate) * 100);
+            const overallScore = Math.round((invScore + supScore + costScore) / 3);
+            const avgTurnoverDays = materials.length ? materials.reduce((s, m) => s + m.daysInStock, 0) / materials.length : 0;
+            const avgYield = production.length ? production.reduce((s, p) => s + p.yieldRate, 0) / production.length : 0;
+
+            const isDark = !document.body.classList.contains('light-mode');
+            const scoreColor = s => s >= 85 ? '#10b981' : s >= 70 ? '#f59e0b' : '#ef4444';
+
+            container.innerHTML = `
+                <div class="page-header"><h2>營運鐵三角</h2></div>
+                <div class="kpi-row">
+                    <div class="kpi-card">
+                        <div class="kpi-label">庫存週轉天數</div>
+                        <div class="kpi-value" style="color: ${scoreColor(invScore)}">${avgTurnoverDays.toFixed(0)}</div>
+                        <div class="kpi-change">目標 &lt; 60 天</div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">供應商達交率</div>
+                        <div class="kpi-value" style="color: ${scoreColor(supScore)}">${(avgDelivery * 100).toFixed(1)}%</div>
+                        <div class="kpi-change">目標 &gt; 95%</div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">成本差異率</div>
+                        <div class="kpi-value" style="color: ${scoreColor(costScore)}">${(costVarRate * 100).toFixed(1)}%</div>
+                        <div class="kpi-change">目標 &lt; 3%</div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">整體健康度</div>
+                        <div class="kpi-value" style="color: ${scoreColor(overallScore)}">${overallScore}</div>
+                        <div class="kpi-change">分</div>
+                    </div>
+                </div>
+                <div class="charts-grid cols-2">
+                    <div class="chart-card"><div class="chart-title">鐵三角雷達圖</div><div class="chart-container" id="chart-triangle-radar"></div></div>
+                    <div class="chart-card full-width"><div class="chart-title">分數趨勢</div><div class="chart-container" id="chart-triangle-trend"></div></div>
+                </div>
+            `;
+
+            // 雷達圖
+            createRadarChart(['庫存效率', '供應商績效', '成本控制', '生產良率', '資金效率'],
+                [invScore, supScore, costScore, Math.round(avgYield * 100), Math.round((1 - 0.32) * 100)],
+                '當前得分', 'chart-triangle-radar');
+
+            // 趨勢線圖
+            if (ironTriangle.length) {
+                const traces = [
+                    { x: ironTriangle.map(t => t.month), y: ironTriangle.map(t => t.inventoryScore), name: '庫存效率', type: 'scatter', mode: 'lines+markers', line: { color: '#3b82f6', width: 2 } },
+                    { x: ironTriangle.map(t => t.month), y: ironTriangle.map(t => t.supplierScore), name: '供應商績效', type: 'scatter', mode: 'lines+markers', line: { color: '#10b981', width: 2 } },
+                    { x: ironTriangle.map(t => t.month), y: ironTriangle.map(t => t.costScore), name: '成本控制', type: 'scatter', mode: 'lines+markers', line: { color: '#f59e0b', width: 2 } }
+                ];
+                Plotly.newPlot('chart-triangle-trend', traces, {
+                    title: { text: '鐵三角分數趨勢', font: { size: 14, color: '#94a3b8' } },
+                    paper_bgcolor: 'rgba(0,0,0,0)',
+                    plot_bgcolor: 'rgba(0,0,0,0)',
+                    font: { color: '#94a3b8', size: 11 },
+                    margin: { t: 40, r: 20, l: 50, b: 50 },
+                    xaxis: { gridcolor: 'rgba(255,255,255,0.06)', color: '#94a3b8' },
+                    yaxis: { gridcolor: 'rgba(255,255,255,0.06)', color: '#94a3b8', min: 50, max: 100, title: '分數' },
+                    showlegend: true,
+                    legend: { font: { color: '#94a3b8', size: 10 } }
+                }, { responsive: true });
+            }
+        }
+
+        function renderCashflow(container) {
+            const cashFlow = currentData.cashFlow;
+            if (!cashFlow) {
+                container.innerHTML = `<div class="page-header"><h2>現金流分析</h2></div><p>現金流資料不存在</p>`;
+                return;
+            }
+
+            const pos = filterByDate(currentData.purchaseOrders || []);
+            const materials = currentData.materials || [];
+            const capitalTiedPct = (cashFlow.capitalTiedRate * 100).toFixed(1);
+
+            container.innerHTML = `
+                <div class="page-header"><h2>現金流分析</h2></div>
+                <div class="kpi-row">
+                    <div class="kpi-card">
+                        <div class="kpi-label">資金佔用率</div>
+                        <div class="kpi-value" style="color: #8b5cf6">${capitalTiedPct}%</div>
+                        <div class="kpi-change">庫存資金</div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">資金釋放潛力</div>
+                        <div class="kpi-value" style="color: #10b981">$${(cashFlow.cashReleasePotential / 1000000).toFixed(1)}M</div>
+                        <div class="kpi-change">元</div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">呆滯金額</div>
+                        <div class="kpi-value" style="color: #ef4444">$${(cashFlow.staleAmount / 1000000).toFixed(1)}M</div>
+                        <div class="kpi-change">元</div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">早到貨隱性成本</div>
+                        <div class="kpi-value" style="color: #f59e0b">$${(cashFlow.earlyDeliveryCost / 1000).toFixed(0)}k</div>
+                        <div class="kpi-change">元</div>
+                    </div>
+                </div>
+                <div class="charts-grid cols-2">
+                    <div class="chart-card"><div class="chart-title">庫存現金變化</div><div class="chart-container" id="chart-cash-waterfall"></div></div>
+                    <div class="chart-card"><div class="chart-title">資金佔用率</div><div class="chart-container" id="chart-cash-gauge"></div></div>
+                    <div class="chart-card"><div class="chart-title">交期資金影響</div><div class="chart-container" id="chart-cash-delivery"></div></div>
+                    <div class="chart-card"><div class="chart-title">物料類型分布</div><div class="chart-container" id="chart-cash-type"></div></div>
+                </div>
+            `;
+
+            // 庫存現金瀑布圖
+            createWaterfallChart(['去年庫存', '+新增採購', '-生產消耗', '+呆滯積壓', '本期庫存'],
+                [cashFlow.lastYearInventory, cashFlow.newPurchases, -cashFlow.productionConsumption, cashFlow.staleAccumulation, cashFlow.currentInventory],
+                '', 'chart-cash-waterfall');
+
+            // 資金佔用率 gauge
+            createGaugeChart(cashFlow.capitalTiedRate * 100, 100, '資金佔用率 (%)', 'chart-cash-gauge');
+
+            // 交期資金影響
+            const earlyAmt = pos.filter(p => p.actualLeadTime < p.standardLeadTime).reduce((s, p) => s + p.totalAmount, 0);
+            const onTimeAmt = pos.filter(p => p.delayDays === 0).reduce((s, p) => s + p.totalAmount, 0);
+            const lateAmt = pos.filter(p => p.delayDays > 0).reduce((s, p) => s + p.totalAmount, 0);
+            Plotly.newPlot('chart-cash-delivery', [{
+                x: ['早到貨', '準時', '遲到'],
+                y: [earlyAmt, onTimeAmt, lateAmt],
+                type: 'bar',
+                marker: { color: ['#f59e0b', '#10b981', '#ef4444'] },
+                text: [earlyAmt, onTimeAmt, lateAmt].map(v => (v / 1000).toFixed(0) + 'k'),
+                textposition: 'outside',
+                textfont: { color: '#94a3b8', size: 10 }
+            }], {
+                title: { text: '資金影響 ($)', font: { size: 14, color: '#94a3b8' } },
+                paper_bgcolor: 'rgba(0,0,0,0)',
+                plot_bgcolor: 'rgba(0,0,0,0)',
+                font: { color: '#94a3b8', size: 11 },
+                margin: { t: 40, r: 20, l: 50, b: 50 },
+                xaxis: { gridcolor: 'rgba(255,255,255,0.06)', color: '#94a3b8' },
+                yaxis: { gridcolor: 'rgba(255,255,255,0.06)', color: '#94a3b8', title: '$' },
+                showlegend: false
+            }, { responsive: true });
+
+            // 物料類型甜甜圈
+            const specValue = materials.filter(m => m.type === '專用料').reduce((s, m) => s + m.stockQty * m.unitCost, 0);
+            const genValue = materials.filter(m => m.type === '通用料').reduce((s, m) => s + m.stockQty * m.unitCost, 0);
+            const auxValue = materials.filter(m => m.type === '輔料' || m.type === '非生產用料').reduce((s, m) => s + m.stockQty * m.unitCost, 0);
+            createDoughnutChart([['專用料', specValue], ['通用料', genValue], ['輔料', auxValue]], null, null, '物料類型', 'chart-cash-type');
+        }
+
+        function renderRiskMatrix(container) {
+            const d = currentData;
+            const rm = d.riskMatrix;
+            if (!rm || !rm.length) {
+                container.innerHTML = '<div class="loading">請先上傳包含風險矩陣數據的資料</div>';
+                return;
+            }
+
+            const criticalCount = rm.filter(r => r.severity === 'critical').length;
+            const highCount = rm.filter(r => r.severity === 'high').length;
+            const medCount = rm.filter(r => r.severity === 'medium').length;
+            const lowCount = rm.filter(r => r.severity === 'low').length;
+
+            container.innerHTML = `
+                <div class="page-header"><h2>供應鏈風險矩陣</h2></div>
+                <div class="grid-kpi">
+                    <div class="glass-panel kpi-card kpi-danger"><span class="kpi-title">嚴重風險 Critical</span><span class="kpi-value">${criticalCount}</span></div>
+                    <div class="glass-panel kpi-card kpi-warning"><span class="kpi-title">高風險 High</span><span class="kpi-value">${highCount}</span></div>
+                    <div class="glass-panel kpi-card"><span class="kpi-title">中風險 Medium</span><span class="kpi-value">${medCount}</span></div>
+                    <div class="glass-panel kpi-card kpi-success"><span class="kpi-title">低風險 Low</span><span class="kpi-value">${lowCount}</span></div>
+                </div>
+                <div class="charts-grid" style="grid-template-columns: 2fr 1fr;">
+                    <div class="chart-card" style="min-height:420px"><div class="chart-title">風險矩陣氣泡圖 <span class="chart-subtitle">Risk Matrix Bubble Chart</span></div><div class="chart-container" id="chart-risk-bubble"></div></div>
+                    <div class="chart-card"><div class="chart-title">風險趨勢 <span class="chart-subtitle">Risk Trend Sparklines</span></div><div class="chart-container" id="chart-risk-trends"></div></div>
+                </div>
+                <div class="glass-panel" style="padding:20px;margin-top:20px;">
+                    <div class="chart-header"><h3 class="chart-title">Top 10 高風險項目 <span class="chart-subtitle">High Risk Items</span></h3></div>
+                    <div class="table-container" id="table-risk-top10"></div>
+                </div>
+            `;
+
+            // 氣泡圖
+            const sColors = { critical: '#ef4444', high: '#f59e0b', medium: '#3b82f6', low: '#10b981' };
+            const bubbleData = rm.map(r => ({
+                x: [r.probability * 100],
+                y: [r.impact * 100],
+                mode: 'markers',
+                marker: { size: 12 + (r.items ? r.items.length * 5 : 0), color: sColors[r.severity] || '#888', opacity: 0.7 },
+                name: r.category,
+                text: r.category,
+                hovertemplate: `${r.category}<br>機率: %{x:.0f}%<br>影響: %{y:.0f}%<extra></extra>`
+            }));
+
+            Plotly.newPlot('chart-risk-bubble', bubbleData, {
+                title: { text: '' },
+                paper_bgcolor: 'rgba(0,0,0,0)', plot_bgcolor: 'rgba(0,0,0,0)', font: { color: '#94a3b8' },
+                margin: { t: 40, r: 20, l: 60, b: 60 }, height: 380,
+                xaxis: { title: '發生機率 (%)', gridcolor: 'rgba(255,255,255,0.06)', range: [0, 100] },
+                yaxis: { title: '影響程度 (%)', gridcolor: 'rgba(255,255,255,0.06)', range: [0, 100] },
+                showlegend: true, legend: { font: { color: '#94a3b8' }, orientation: 'h', x: 0.5, xanchor: 'center', y: -0.1 },
+                shapes: [
+                    { type: 'line', x0: 50, x1: 50, y0: 0, y1: 100, line: { color: 'rgba(255,255,255,0.15)', dash: 'dash' } },
+                    { type: 'line', x0: 0, x1: 100, y0: 50, y1: 50, line: { color: 'rgba(255,255,255,0.15)', dash: 'dash' } }
+                ]
+            }, { responsive: true });
+
+            // 趨勢線圖
+            const tLabels = ['M-7', 'M-6', 'M-5', 'M-4', 'M-3', 'M-2'];
+            const colors = ['#ef4444', '#f59e0b', '#3b82f6', '#8b5cf6', '#10b981'];
+            const trendData = rm.slice(0, 5).map((r, i) => ({
+                x: tLabels,
+                y: r.trend ? r.trend.map(v => +(v * 100).toFixed(1)) : [0, 0, 0, 0, 0, 0],
+                type: 'scatter',
+                mode: 'lines+markers',
+                name: r.category,
+                line: { color: colors[i % colors.length], width: 2 },
+                marker: { color: colors[i % colors.length], size: 5 }
+            }));
+
+            Plotly.newPlot('chart-risk-trends', trendData, {
+                title: { text: '風險指數趨勢', font: { size: 14, color: '#94a3b8' } },
+                paper_bgcolor: 'rgba(0,0,0,0)', plot_bgcolor: 'rgba(0,0,0,0)', font: { color: '#94a3b8' },
+                margin: { t: 40, r: 20, l: 50, b: 40 }, height: 300,
+                xaxis: { gridcolor: 'rgba(255,255,255,0.06)' },
+                yaxis: { title: '風險指數', gridcolor: 'rgba(255,255,255,0.06)' },
+                showlegend: true, legend: { font: { color: '#94a3b8' }, orientation: 'h', x: 0.5, xanchor: 'center', y: -0.2 }
+            }, { responsive: true });
+
+            // Top 10 風險表格
+            const allItems = [];
+            rm.forEach(r => {
+                if (r.items) {
+                    r.items.forEach(item => {
+                        allItems.push({
+                            item, category: r.category, probability: r.probability, impact: r.impact,
+                            severity: r.severity, score: Math.round(r.probability * r.impact * 100),
+                            action: r.severity === 'critical' ? '立即建立替代供應商' : '加強監控並制定應急計畫'
+                        });
+                    });
+                }
+            });
+            allItems.sort((a, b) => b.score - a.score);
+            const top10 = allItems.slice(0, 10);
+
+            document.getElementById('table-risk-top10').innerHTML = `<table class="data-table">
+                <thead><tr><th>風險項目</th><th>類別</th><th>機率</th><th>影響</th><th>等級</th><th>建議行動</th></tr></thead>
+                <tbody>${top10.map(r => `
+                    <tr>
+                        <td>${r.item}</td>
+                        <td>${r.category}</td>
+                        <td>${(r.probability * 100).toFixed(0)}%</td>
+                        <td>${(r.impact * 100).toFixed(0)}%</td>
+                        <td><span class="status-badge ${r.severity === 'critical' ? 'badge-danger' : r.severity === 'high' ? 'badge-warning' : 'badge-info'}">${r.severity}</span></td>
+                        <td>${r.action}</td>
+                    </tr>`).join('')}
+                </tbody>
+            </table>`;
+        }
+
+        function renderProcurementQuad(container) {
+            const d = currentData;
+            const pos = filterByDate(d.purchaseOrders);
+            if (!pos || !pos.length) {
+                container.innerHTML = '<div class="loading">請先上傳採購數據</div>';
+                return;
+            }
+
+            const avgCycle = pos.reduce((s, p) => s + (p.cycleDays || p.actualLeadTime || 0), 0) / pos.length;
+            const sorted = [...pos].sort((a, b) => a.totalAmount - b.totalAmount);
+            const medianAmount = sorted[Math.floor(sorted.length / 2)].totalAmount;
+            const xT = avgCycle, yT = medianAmount;
+
+            const quadrants = {
+                strategic: pos.filter(p => (p.cycleDays || p.actualLeadTime || 0) >= xT && p.totalAmount >= yT),
+                inefficient: pos.filter(p => (p.cycleDays || p.actualLeadTime || 0) >= xT && p.totalAmount < yT),
+                fast: pos.filter(p => (p.cycleDays || p.actualLeadTime || 0) < xT && p.totalAmount < yT),
+                urgent: pos.filter(p => (p.cycleDays || p.actualLeadTime || 0) < xT && p.totalAmount >= yT),
+            };
+
+            const fmtCurrency = v => v >= 1e6 ? `$${(v / 1e6).toFixed(1)}M` : v >= 1e3 ? `$${(v / 1e3).toFixed(1)}K` : `$${Math.round(v).toLocaleString()}`;
+
+            container.innerHTML = `
+                <div class="page-header"><h2>採購效率象限</h2></div>
+                <div class="grid-kpi">
+                    <div class="glass-panel kpi-card"><span class="kpi-title">平均採購週期</span><span class="kpi-value">${avgCycle.toFixed(1)} 天</span></div>
+                    <div class="glass-panel kpi-card kpi-purple"><span class="kpi-title">中位數採購金額</span><span class="kpi-value">${fmtCurrency(medianAmount)}</span></div>
+                    <div class="glass-panel kpi-card kpi-warning"><span class="kpi-title">效率異常 Zone B</span><span class="kpi-value">${quadrants.inefficient.length} 筆</span></div>
+                    <div class="glass-panel kpi-card kpi-success"><span class="kpi-title">快速採購 Zone C</span><span class="kpi-value">${quadrants.fast.length} 筆</span></div>
+                </div>
+                <div class="charts-grid" style="grid-template-columns: 3fr 1fr;">
+                    <div class="chart-card" style="min-height:420px"><div class="chart-title">採購效率散佈圖 <span class="chart-subtitle">Procurement Efficiency Scatter</span></div><div class="chart-container" id="chart-proc-scatter"></div></div>
+                    <div class="glass-panel quadrant-side" id="quadrant-stats" style="padding:16px;"></div>
+                </div>
+                <div class="glass-panel" style="padding:20px;margin-top:20px;">
+                    <div class="chart-header"><h3 class="chart-title">效率異常項目 (Zone B) <span class="chart-subtitle">Inefficiency Zone Items</span></h3></div>
+                    <div class="table-container" id="table-proc-anomaly"></div>
+                </div>
+            `;
+
+            // 四象限散點圖
+            const qC = { strategic: '#8b5cf6', inefficient: '#ef4444', fast: '#10b981', urgent: '#f59e0b' };
+            const qL = { strategic: '戰略採購(A)', inefficient: '效率異常(B)', fast: '快速採購(C)', urgent: '緊急採購(D)' };
+            const scatterData = Object.entries(quadrants).map(([k, items]) => ({
+                x: items.slice(0, 50).map(p => p.cycleDays || p.actualLeadTime || 0),
+                y: items.slice(0, 50).map(p => p.totalAmount),
+                mode: 'markers',
+                type: 'scatter',
+                name: qL[k],
+                marker: { color: qC[k], size: 10, opacity: 0.7 },
+                text: items.slice(0, 50).map(p => `${p.orderId || p.supplierName || 'N/A'}<br>週期: ${p.cycleDays || p.actualLeadTime || 0}天<br>金額: ${fmtCurrency(p.totalAmount)}`),
+                hovertemplate: '%{text}<extra></extra>'
+            }));
+
+            Plotly.newPlot('chart-proc-scatter', scatterData, {
+                title: { text: '' },
+                paper_bgcolor: 'rgba(0,0,0,0)', plot_bgcolor: 'rgba(0,0,0,0)', font: { color: '#94a3b8' },
+                margin: { t: 40, r: 20, l: 60, b: 60 }, height: 380,
+                xaxis: { title: '採購週期 (天)', gridcolor: 'rgba(255,255,255,0.06)' },
+                yaxis: { title: '採購金額', gridcolor: 'rgba(255,255,255,0.06)' },
+                showlegend: true, legend: { font: { color: '#94a3b8' }, orientation: 'v', x: 1.02 },
+                shapes: [
+                    { type: 'line', x0: xT, x1: xT, y0: 0, y1: Math.max(...pos.map(p => p.totalAmount)) * 1.1, line: { color: 'rgba(255,255,255,0.2)', dash: 'dash' } },
+                    { type: 'line', x0: 0, x1: Math.max(...pos.map(p => p.cycleDays || p.actualLeadTime || 0)) * 1.1, y0: yT, y1: yT, line: { color: 'rgba(255,255,255,0.2)', dash: 'dash' } }
+                ]
+            }, { responsive: true });
+
+            // 四象限統計
+            document.getElementById('quadrant-stats').innerHTML = Object.entries(quadrants).map(([k, items]) => `
+                <div class="glass-panel quadrant-stat" style="border-left: 3px solid ${qC[k]};">
+                    <div class="q-label">${qL[k]}</div>
+                    <div class="q-value">${items.length} 筆</div>
+                    <div class="q-count">${fmtCurrency(items.reduce((s, p) => s + p.totalAmount, 0))}</div>
+                </div>`).join('');
+
+            // Zone B 異常表格
+            const zoneB = quadrants.inefficient.slice(0, 15);
+            document.getElementById('table-proc-anomaly').innerHTML = `<table class="data-table">
+                <thead><tr><th>供應商</th><th>品名</th><th>採購金額</th><th>週期(天)</th><th>建議</th></tr></thead>
+                <tbody>${zoneB.map(p => `
+                    <tr>
+                        <td>${p.supplierName || 'N/A'}</td>
+                        <td>${p.materialName || p.productName || 'N/A'}</td>
+                        <td>${fmtCurrency(p.totalAmount)}</td>
+                        <td>${p.cycleDays || p.actualLeadTime || 0}</td>
+                        <td><span class="status-badge badge-warning">需優化</span></td>
+                    </tr>`).join('')}
+                </tbody>
+            </table>`;
+        }
+
+        function renderWhatif(container) {
+            const d = currentData;
+            const pros = filterByDate(d.productionOrders);
+            if (!pros || !pros.length) {
+                container.innerHTML = '<div class="loading">請先上傳資料</div>';
+                return;
+            }
+            container.innerHTML = `
+                <div class="page-header"><h2>What-If 模擬器</h2></div>
+                <div class="simulator-controls">
+                    <div class="glass-panel sim-slider-group">
+                        <label>原料價格變動 Material Price Change</label>
+                        <div class="sim-value" id="sim-price-val">0%</div>
+                        <input type="range" id="sim-price" min="-30" max="30" value="0" step="1">
+                    </div>
+                    <div class="glass-panel sim-slider-group">
+                        <label>良率變動 Yield Change</label>
+                        <div class="sim-value" id="sim-yield-val">0%</div>
+                        <input type="range" id="sim-yield" min="-10" max="10" value="0" step="0.5">
+                    </div>
+                    <div class="glass-panel sim-slider-group">
+                        <label>產量變動 Volume Change</label>
+                        <div class="sim-value" id="sim-volume-val">0%</div>
+                        <input type="range" id="sim-volume" min="-30" max="30" value="0" step="1">
+                    </div>
+                </div>
+                <div class="glass-panel sim-summary" id="sim-summary"></div>
+                <div class="charts-grid cols-2">
+                    <div class="chart-card"><div class="chart-title">單位成本變化 <span class="chart-subtitle">Unit Cost Impact</span></div><div class="chart-container" id="chart-sim-cost"></div></div>
+                    <div class="chart-card"><div class="chart-title">成本結構變化 <span class="chart-subtitle">Cost Structure Shift</span></div><div class="chart-container" id="chart-sim-structure"></div></div>
+                </div>
+                <div class="charts-grid cols-1">
+                    <div class="chart-card full-width"><div class="chart-title">利潤影響瀑布 <span class="chart-subtitle">Profit Impact Waterfall</span></div><div class="chart-container" id="chart-sim-waterfall"></div></div>
+                </div>
+            `;
+
+            // 初始化 slider 事件監聽
+            ['sim-price', 'sim-yield', 'sim-volume'].forEach(id => {
+                document.getElementById(id).addEventListener('input', updateSimulator);
+            });
+
+            updateSimulator();
+        }
+
+        function updateSimulator() {
+            const d = currentData;
+            const pros = filterByDate(d.productionOrders);
+            if (!pros || !pros.length) return;
+
+            const priceChange = parseFloat(document.getElementById('sim-price').value) / 100;
+            const yieldChange = parseFloat(document.getElementById('sim-yield').value) / 100;
+            const volumeChange = parseFloat(document.getElementById('sim-volume').value) / 100;
+
+            document.getElementById('sim-price-val').textContent = `${priceChange >= 0 ? '+' : ''}${(priceChange * 100).toFixed(0)}%`;
+            document.getElementById('sim-yield-val').textContent = `${yieldChange >= 0 ? '+' : ''}${(yieldChange * 100).toFixed(1)}%`;
+            document.getElementById('sim-volume-val').textContent = `${volumeChange >= 0 ? '+' : ''}${(volumeChange * 100).toFixed(0)}%`;
+
+            // 基準計算
+            const baseMat = pros.reduce((s, p) => s + p.actMaterialCost * p.goodOutput, 0);
+            const baseLabor = pros.reduce((s, p) => s + p.actLaborCost * p.goodOutput, 0);
+            const baseOH = pros.reduce((s, p) => s + p.actOverheadCost * p.goodOutput, 0);
+            const baseTotal = baseMat + baseLabor + baseOH;
+            const baseVolume = pros.reduce((s, p) => s + p.goodOutput, 0);
+            const baseUnitCost = baseTotal / baseVolume;
+
+            // 模擬計算
+            const simMat = baseMat * (1 + priceChange);
+            const avgYield = pros.reduce((s, p) => s + p.yieldRate, 0) / pros.length;
+            const newYield = Math.min(1, Math.max(0.5, avgYield + yieldChange));
+            const yieldImpact = avgYield / newYield;
+            const simLabor = baseLabor * yieldImpact;
+            const simOH = baseOH * (1 + volumeChange * -0.3);
+            const simTotal = simMat + simLabor + simOH;
+            const simVolume = baseVolume * (1 + volumeChange);
+            const simUnitCost = simTotal / (simVolume || 1);
+            const totalCostChange = simTotal - baseTotal;
+            const pctChange = baseTotal ? (simTotal - baseTotal) / baseTotal : 0;
+
+            // 摘要顯示
+            const changeColor = totalCostChange > 0 ? '#ef4444' : '#10b981';
+            const fmtCurrency = v => v >= 1e6 ? `$${(v / 1e6).toFixed(1)}M` : v >= 1e3 ? `$${(v / 1e3).toFixed(1)}K` : `$${Math.round(v).toLocaleString()}`;
+            document.getElementById('sim-summary').innerHTML = `
+                <div style="font-size:0.85rem;color:var(--text-secondary);margin-bottom:4px;">預估總成本變動 Projected Cost Change</div>
+                <div class="big-number" style="color:${changeColor}">${totalCostChange >= 0 ? '+' : ''}${fmtCurrency(Math.abs(totalCostChange))}</div>
+                <div class="sub-text">${Math.abs(pctChange * 100).toFixed(1)}% ${totalCostChange >= 0 ? '增加' : '減少'} | 單位成本: ${fmtCurrency(baseUnitCost)} → ${fmtCurrency(simUnitCost)}</div>`;
+
+            // 月份趨勢
+            const months = [...new Set(pros.map(p => p.month))].sort();
+            const baseByMonth = months.map(m => {
+                const mp = pros.filter(p => p.month === m);
+                const vol = mp.reduce((s, p) => s + p.goodOutput, 0);
+                const cost = mp.reduce((s, p) => s + (p.actMaterialCost + p.actLaborCost + p.actOverheadCost) * p.goodOutput, 0);
+                return vol ? +(cost / vol).toFixed(2) : 0;
+            });
+            const simByMonth = baseByMonth.map(v => +(v * (1 + pctChange)).toFixed(2));
+
+            // 單位成本趨勢圖
+            Plotly.newPlot('chart-sim-cost', [
+                { x: months, y: baseByMonth, name: '基準 Baseline', type: 'scatter', mode: 'lines+markers', line: { color: '#3b82f6', width: 2 }, fill: 'tozeroy', fillcolor: 'rgba(59,130,246,0.1)' },
+                { x: months, y: simByMonth, name: '模擬 Simulated', type: 'scatter', mode: 'lines+markers', line: { color: '#ef4444', width: 2, dash: 'dash' }, fill: 'tozeroy', fillcolor: 'rgba(239,68,68,0.1)' }
+            ], {
+                title: { text: '單位成本趨勢', font: { size: 14, color: '#94a3b8' } },
+                paper_bgcolor: 'rgba(0,0,0,0)', plot_bgcolor: 'rgba(0,0,0,0)', font: { color: '#94a3b8' },
+                margin: { t: 40, r: 20, l: 50, b: 50 },
+                xaxis: { gridcolor: 'rgba(255,255,255,0.06)', color: '#94a3b8' },
+                yaxis: { gridcolor: 'rgba(255,255,255,0.06)', color: '#94a3b8', title: '單位成本' },
+                showlegend: true, legend: { font: { color: '#94a3b8' }, orientation: 'h', x: 0.5, xanchor: 'center', y: -0.1 }
+            }, { responsive: true });
+
+            // 成本結構堆疊圖
+            Plotly.newPlot('chart-sim-structure', [
+                { x: ['基準', '模擬'], y: [baseMat / baseTotal * 100, simMat / simTotal * 100], name: '料 Material', type: 'bar', marker: { color: '#3b82f6' } },
+                { x: ['基準', '模擬'], y: [baseLabor / baseTotal * 100, simLabor / simTotal * 100], name: '工 Labor', type: 'bar', marker: { color: '#10b981' } },
+                { x: ['基準', '模擬'], y: [baseOH / baseTotal * 100, simOH / simTotal * 100], name: '費 Overhead', type: 'bar', marker: { color: '#f59e0b' } }
+            ], {
+                title: { text: '成本結構 (%)', font: { size: 14, color: '#94a3b8' } },
+                paper_bgcolor: 'rgba(0,0,0,0)', plot_bgcolor: 'rgba(0,0,0,0)', font: { color: '#94a3b8' },
+                margin: { t: 40, r: 20, l: 50, b: 50 },
+                xaxis: { gridcolor: 'rgba(255,255,255,0.06)', color: '#94a3b8' },
+                yaxis: { gridcolor: 'rgba(255,255,255,0.06)', color: '#94a3b8', title: '%', range: [0, 100] },
+                barmode: 'stack', showlegend: true, legend: { font: { color: '#94a3b8' } }
+            }, { responsive: true });
+
+            // 瀑布圖
+            const matD = simMat - baseMat;
+            const labD = simLabor - baseLabor;
+            const ohD = simOH - baseOH;
+            createWaterfallChart(['基準成本', '原料變動', '人工變動', '費用變動', '模擬成本'],
+                [baseTotal, matD, labD, ohD, simTotal], '', 'chart-sim-waterfall');
+        }
+
+        function renderExecCockpit(container) {
+            const d = currentData;
+            const pros = filterByDate(d.productionOrders);
+            const pos = filterByDate(d.purchaseOrders);
+            const mats = d.materials;
+
+            // 計算 KPI
+            const staleRatio = mats.filter(m => m.daysInStock > 90).length / mats.length;
+            const avgDelivery = d.suppliers.reduce((s, sup) => s + sup.onTimeDeliveryRate, 0) / d.suppliers.length;
+            const totalVar = pros.reduce((s, p) => s + Math.abs(p.materialVar + p.laborVar + p.overheadVar), 0);
+            const totalStd = pros.reduce((s, p) => s + p.stdTotalCost, 0);
+            const costVarRate = totalStd ? totalVar / totalStd : 0;
+            const avgYield = pros.length ? pros.reduce((s, p) => s + p.yieldRate, 0) / pros.length : 0;
+            const totalInv = mats.reduce((s, m) => s + m.stockQty * m.unitCost, 0);
+            const monthlyUsage = mats.reduce((s, m) => s + m.monthlyUsage * m.unitCost, 0);
+            const turnoverRate = monthlyUsage ? (monthlyUsage * 12) / totalInv : 0;
+            const cashEfficiency = 1 - (d.cashFlow ? d.cashFlow.capitalTiedRate : 0.32);
+
+            const gauges = [
+                { id: 'g1', label: '營運健康度', subtitle: 'Overall Health', value: Math.round(((1 - staleRatio) * 100 * 0.3 + avgDelivery * 100 * 0.3 + (1 - costVarRate) * 100 * 0.2 + avgYield * 100 * 0.2)), color: '#3b82f6', sparkData: [72, 75, 78, 74, 80, 82] },
+                { id: 'g2', label: '庫存週轉效率', subtitle: 'Inventory Turnover', value: Math.min(100, Math.round(turnoverRate / 12 * 100)), color: '#8b5cf6', sparkData: [55, 58, 60, 62, 58, 65] },
+                { id: 'g3', label: '供應商達交率', subtitle: 'On-Time Delivery', value: Math.round(avgDelivery * 100), color: '#10b981', sparkData: [88, 90, 87, 92, 91, 93] },
+                { id: 'g4', label: '成本控制率', subtitle: 'Cost Control', value: Math.round((1 - costVarRate) * 100), color: '#f59e0b', sparkData: [92, 90, 94, 91, 95, 93] },
+                { id: 'g5', label: '品質良率', subtitle: 'Quality Yield', value: Math.round(avgYield * 100), color: '#0ea5e9', sparkData: [95, 96, 95, 97, 96, 97] },
+                { id: 'g6', label: '現金流效率', subtitle: 'Cash Flow', value: Math.round(cashEfficiency * 100), color: '#ec4899', sparkData: [62, 65, 68, 66, 70, 68] },
+            ];
+
+            const greenCount = gauges.filter(g => g.value >= 85).length;
+            const yellowCount = gauges.filter(g => g.value >= 70 && g.value < 85).length;
+            const redCount = gauges.filter(g => g.value < 70).length;
+
+            const fmtCurrency = v => v >= 1e6 ? `$${(v / 1e6).toFixed(1)}M` : v >= 1e3 ? `$${(v / 1e3).toFixed(1)}K` : `$${Math.round(v).toLocaleString()}`;
+
+            container.innerHTML = `
+                <div class="page-header"><h2>管理駕駛艙</h2></div>
+                <div class="glass-panel traffic-summary-bar">
+                    <span style="font-weight:600;font-size:0.85rem;">狀態摘要</span>
+                    <div class="traffic-summary-item"><span class="traffic-dot green"></span> ${greenCount} 正常</div>
+                    <div class="traffic-summary-item"><span class="traffic-dot yellow"></span> ${yellowCount} 注意</div>
+                    <div class="traffic-summary-item"><span class="traffic-dot red"></span> ${redCount} 警告</div>
+                </div>
+                <div class="gauge-grid">${gauges.map(g => `
+                    <div class="glass-panel gauge-widget">
+                        <div class="gauge-chart-container" id="gauge-${g.id}" style="height:120px;"></div>
+                        <div class="gauge-label">${g.label} <span style="font-size:0.7rem;color:var(--text-muted)">${g.subtitle}</span></div>
+                        <div class="gauge-value-text" style="color:${g.value >= 85 ? '#10b981' : g.value >= 70 ? '#f59e0b' : '#ef4444'}">${g.value}%</div>
+                        <div class="gauge-sparkline">${g.sparkData.map(v => `<div class="spark-bar" style="height:${v * 0.24}px;background:${g.color}"></div>`).join('')}</div>
+                    </div>`).join('')}
+                </div>
+                <div class="insight-cards">
+                    <div class="glass-panel insight-card">
+                        <div class="insight-icon">📦</div>
+                        <div class="insight-title">庫存建議</div>
+                        <div class="insight-text">目前有 ${mats.filter(m => m.daysInStock > 90).length} 項物料超過 90 天未動銷，建議針對專用料啟動處分流程，預估可釋放 ${fmtCurrency(mats.filter(m => m.daysInStock > 90).reduce((s, m) => s + m.stockQty * m.unitCost, 0))} 資金。</div>
+                    </div>
+                    <div class="glass-panel insight-card">
+                        <div class="insight-icon">🚚</div>
+                        <div class="insight-title">供應商預警</div>
+                        <div class="insight-text">${d.suppliers.filter(s => s.tier === 'At-Risk').length} 家供應商處於 At-Risk 等級，建議啟動供應商輔導計畫或尋找備援來源。</div>
+                    </div>
+                    <div class="glass-panel insight-card">
+                        <div class="insight-icon">💰</div>
+                        <div class="insight-title">成本觀察</div>
+                        <div class="insight-text">本期成本差異率為 ${(costVarRate * 100).toFixed(1)}%，主要來自材料價格波動。建議加強長約比例，鎖定關鍵料件價格。</div>
+                    </div>
+                    <div class="glass-panel insight-card">
+                        <div class="insight-icon">🏭</div>
+                        <div class="insight-title">良率提升</div>
+                        <div class="insight-text">整體良率 ${(avgYield * 100).toFixed(1)}%，${pros.filter(p => p.yieldRate < 0.95).length} 筆工單良率低於 95%，建議優先改善製程穩定性。</div>
+                    </div>
+                </div>
+            `;
+
+            // 渲染 Gauge 圖表
+            gauges.forEach(g => {
+                const gc = g.value >= 85 ? '#10b981' : g.value >= 70 ? '#f59e0b' : '#ef4444';
+                Plotly.newPlot(`gauge-${g.id}`, [{
+                    type: 'indicator',
+                    mode: 'gauge+number',
+                    value: g.value,
+                    gauge: {
+                        axis: { range: [0, 100], ticks: '' },
+                        bar: { color: gc, thickness: 0.2 },
+                        bgcolor: 'rgba(255,255,255,0.05)',
+                        borderwidth: 0,
+                        steps: [
+                            { range: [0, 70], color: 'rgba(239,68,68,0.2)' },
+                            { range: [70, 85], color: 'rgba(245,158,11,0.2)' },
+                            { range: [85, 100], color: 'rgba(16,185,129,0.2)' }
+                        ]
+                    }
+                }], {
+                    paper_bgcolor: 'rgba(0,0,0,0)', font: { color: '#94a3b8' },
+                    margin: { t: 20, r: 20, l: 20, b: 20 }, height: 120
+                }, { responsive: true });
+            });
+        }
+
+        function renderVsm(container) {
+            const d = currentData;
+            const vs = d.valueStream;
+            if (!vs || !vs.length) {
+                container.innerHTML = '<div class="loading">請先上傳包含價值流數據的資料</div>';
+                return;
+            }
+
+            const totalCycle = vs.reduce((s, n) => s + n.cycleTime, 0);
+            const totalWait = vs.reduce((s, n) => s + n.waitTime, 0);
+            const totalLead = totalCycle + totalWait;
+            const valueAddTime = vs.reduce((s, n) => s + n.cycleTime * n.valueAddRatio, 0);
+            const valueAddPct = totalLead ? valueAddTime / totalLead : 0;
+            const wastePct = 1 - valueAddPct;
+
+            const arrowSvg = '<svg viewBox="0 0 32 20" fill="currentColor"><path d="M0 8h24l-6-6 2-2 10 10-10 10-2-2 6-6H0z"/></svg>';
+            const colors = ['#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6', '#0ea5e9', '#ec4899', '#14b8a6'];
+
+            container.innerHTML = `
+                <div class="page-header"><h2>價值流程圖 VSM</h2></div>
+                <div class="grid-kpi">
+                    <div class="glass-panel kpi-card"><span class="kpi-title">總前置時間 Total Lead Time</span><span class="kpi-value">${totalLead.toFixed(1)} 天</span></div>
+                    <div class="glass-panel kpi-card kpi-success"><span class="kpi-title">增值時間 Value-Add</span><span class="kpi-value">${valueAddTime.toFixed(1)} 天</span></div>
+                    <div class="glass-panel kpi-card kpi-danger"><span class="kpi-title">浪費比例 Waste</span><span class="kpi-value">${(wastePct * 100).toFixed(1)}%</span></div>
+                    <div class="glass-panel kpi-card kpi-warning"><span class="kpi-title">瓶頸站點 Bottlenecks</span><span class="kpi-value">${vs.filter(n => n.bottleneck).length} 站</span></div>
+                </div>
+                <div class="glass-panel" style="padding:24px;margin-bottom:20px;">
+                    <div class="chart-header"><h3 class="chart-title">價值流程圖 <span class="chart-subtitle">Value Stream Flow</span></h3></div>
+                    <div class="vsm-container"><div class="vsm-flow">${vs.map((node, i) => `
+                        <div class="vsm-node ${node.bottleneck ? 'bottleneck' : ''}">
+                            <div class="node-title">${node.name}</div>
+                            <div class="node-metric">週期: <b>${node.cycleTime}天</b></div>
+                            <div class="node-metric">等待: <b>${node.waitTime}天</b></div>
+                            <div class="node-metric">增值率: <b>${(node.valueAddRatio * 100).toFixed(0)}%</b></div>
+                        </div>
+                        ${i < vs.length - 1 ? `<div class="vsm-arrow animated">${arrowSvg}</div>` : ''}`).join('')}
+                    </div></div>
+                </div>
+                <div class="glass-panel vsm-timeline" style="padding:16px;">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+                        <span style="font-size:0.85rem;font-weight:600;">前置時間分解</span>
+                        <span style="font-size:0.8rem;color:var(--text-secondary);">總計 ${totalLead.toFixed(1)} 天</span>
+                    </div>
+                    <div class="vsm-timeline-bar">${vs.map((n, i) => `
+                        <div class="segment" style="width:${((n.cycleTime + n.waitTime) / totalLead * 100).toFixed(1)}%;background:${colors[i % colors.length]}" title="${n.name}: ${(n.cycleTime + n.waitTime).toFixed(1)}天"></div>`).join('')}
+                    </div>
+                    <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:8px;">${vs.map((n, i) => `
+                        <span style="font-size:0.7rem;color:var(--text-secondary);display:flex;align-items:center;gap:4px;">
+                            <span style="width:8px;height:8px;border-radius:2px;background:${colors[i % colors.length]};display:inline-block"></span>${n.name}
+                        </span>`).join('')}
+                    </div>
+                    <div class="vsm-efficiency">
+                        <div class="stat"><div class="stat-value" style="color:var(--success)">${(valueAddPct * 100).toFixed(1)}%</div><div class="stat-label">增值比例</div></div>
+                        <div class="stat"><div class="stat-value" style="color:var(--danger)">${(wastePct * 100).toFixed(1)}%</div><div class="stat-label">浪費比例</div></div>
+                    </div>
+                </div>
+                <div class="charts-grid cols-2" style="margin-top:20px;">
+                    <div class="chart-card"><div class="chart-title">各站點週期時間 <span class="chart-subtitle">Station Cycle Times</span></div><div class="chart-container" id="chart-vsm-cycle"></div></div>
+                    <div class="chart-card"><div class="chart-title">增值 vs 浪費比例 <span class="chart-subtitle">Value-Add vs Waste</span></div><div class="chart-container" id="chart-vsm-ratio"></div></div>
+                </div>
+            `;
+
+            // 週期時間柱狀圖
+            Plotly.newPlot('chart-vsm-cycle', [{
+                x: vs.map(n => n.name),
+                y: vs.map(n => n.cycleTime + n.waitTime),
+                type: 'bar',
+                marker: { color: vs.map(n => n.bottleneck ? '#ef4444' : '#3b82f6') },
+                text: vs.map(n => (n.cycleTime + n.waitTime).toFixed(1)),
+                textposition: 'outside',
+                textfont: { color: '#94a3b8', size: 10 }
+            }], {
+                title: { text: '天數', font: { size: 14, color: '#94a3b8' } },
+                paper_bgcolor: 'rgba(0,0,0,0)', plot_bgcolor: 'rgba(0,0,0,0)', font: { color: '#94a3b8' },
+                margin: { t: 40, r: 20, l: 50, b: 80 },
+                xaxis: { gridcolor: 'rgba(255,255,255,0.06)', color: '#94a3b8', tickangle: -30 },
+                yaxis: { gridcolor: 'rgba(255,255,255,0.06)', color: '#94a3b8' },
+                showlegend: false
+            }, { responsive: true });
+
+            // 增值 vs 浪費堆疊圖
+            Plotly.newPlot('chart-vsm-ratio', [
+                { x: vs.map(n => n.name), y: vs.map(n => +(n.cycleTime * n.valueAddRatio).toFixed(2)), name: '增值', type: 'bar', marker: { color: '#10b981' } },
+                { x: vs.map(n => n.name), y: vs.map(n => +(n.cycleTime * (1 - n.valueAddRatio) + n.waitTime).toFixed(2)), name: '浪費', type: 'bar', marker: { color: 'rgba(239,68,68,0.5)' } }
+            ], {
+                paper_bgcolor: 'rgba(0,0,0,0)', plot_bgcolor: 'rgba(0,0,0,0)', font: { color: '#94a3b8' },
+                margin: { t: 40, r: 20, l: 50, b: 80 },
+                xaxis: { gridcolor: 'rgba(255,255,255,0.06)', color: '#94a3b8', tickangle: -30 },
+                yaxis: { gridcolor: 'rgba(255,255,255,0.06)', color: '#94a3b8' },
+                barmode: 'stack', showlegend: true, legend: { font: { color: '#94a3b8' } }
+            }, { responsive: true });
+        }
+
+        function renderBenchmark(container) {
+            const d = currentData;
+            const bm = d.benchmark;
+            if (!bm || !bm.dimensions || !bm.dimensions.length) {
+                container.innerHTML = '<div class="loading">請先上傳包含標竿數據的資料</div>';
+                return;
+            }
+
+            const avgGap = bm.dimensions.reduce((s, _, i) => s + (bm.industryBest[i] - bm.company[i]), 0) / bm.dimensions.length;
+
+            container.innerHTML = `
+                <div class="page-header"><h2>標竿對比分析</h2></div>
+                <div class="grid-kpi">
+                    <div class="glass-panel kpi-card"><span class="kpi-title">平均標竿差距</span><span class="kpi-value">${avgGap.toFixed(1)} pts</span></div>
+                    <div class="glass-panel kpi-card kpi-success"><span class="kpi-title">優於行業平均</span><span class="kpi-value">${bm.dimensions.filter((_, i) => bm.company[i] > bm.industryAvg[i]).length} / ${bm.dimensions.length}</span></div>
+                    <div class="glass-panel kpi-card kpi-warning"><span class="kpi-title">達標竿水準</span><span class="kpi-value">${bm.dimensions.filter((_, i) => bm.company[i] >= bm.industryBest[i]).length} / ${bm.dimensions.length}</span></div>
+                    <div class="glass-panel kpi-card kpi-purple"><span class="kpi-title">最大差距維度</span><span class="kpi-value">${bm.dimensions[bm.dimensions.reduce((mi, _, i) => (bm.industryBest[i] - bm.company[i]) > (bm.industryBest[mi] - bm.company[mi]) ? i : mi, 0)]}</span></div>
+                </div>
+                <div class="charts-grid cols-2">
+                    <div class="chart-card" style="min-height:380px"><div class="chart-title">標竿雷達對比 <span class="chart-subtitle">Benchmark Radar</span></div><div class="chart-container" id="chart-bench-radar"></div></div>
+                    <div class="chart-card"><div class="chart-title">與標竿差距 <span class="chart-subtitle">Gap to Benchmark</span></div><div class="chart-container" id="chart-bench-gap"></div></div>
+                </div>
+                <div class="glass-panel" style="padding:20px;margin-top:20px;">
+                    <div class="chart-header"><h3 class="chart-title">改善路線圖 <span class="chart-subtitle">Improvement Roadmap</span></h3></div>
+                    <div class="table-container" id="table-bench-roadmap"></div>
+                </div>
+            `;
+
+            // 雷達圖
+            Plotly.newPlot('chart-bench-radar', [
+                { type: 'scatterpolar', r: bm.company, theta: bm.dimensions, name: '公司 Company', fill: 'toself', fillcolor: 'rgba(59,130,246,0.15)', line: { color: '#3b82f6', width: 2 }, marker: { color: '#3b82f6', size: 6 } },
+                { type: 'scatterpolar', r: bm.industryAvg, theta: bm.dimensions, name: '行業平均', fill: 'toself', fillcolor: 'rgba(245,158,11,0.08)', line: { color: '#f59e0b', width: 2, dash: 'dash' }, marker: { color: '#f59e0b', size: 6 } },
+                { type: 'scatterpolar', r: bm.industryBest, theta: bm.dimensions, name: '行業標竿', fill: 'toself', fillcolor: 'rgba(16,185,129,0.08)', line: { color: '#10b981', width: 2 }, marker: { color: '#10b981', size: 6 } }
+            ], {
+                paper_bgcolor: 'rgba(0,0,0,0)', font: { color: '#94a3b8' },
+                margin: { t: 40, r: 40, l: 40, b: 40 }, height: 350,
+                polar: { bgcolor: 'rgba(0,0,0,0)', angularaxis: { color: '#94a3b8', tickfont: { size: 10 } }, radialaxis: { color: '#94a3b8', tickfont: { size: 9 }, gridcolor: 'rgba(255,255,255,0.08)', range: [0, 100] } },
+                showlegend: true, legend: { font: { color: '#94a3b8' }, orientation: 'h', x: 0.5, xanchor: 'center', y: -0.1 }
+            }, { responsive: true });
+
+            // 差距圖 (水平柱狀堆疊)
+            const gaps = bm.dimensions.map((_, i) => bm.industryBest[i] - bm.company[i]);
+            Plotly.newPlot('chart-bench-gap', [
+                { y: bm.dimensions, x: bm.company, name: '公司', type: 'bar', orientation: 'h', marker: { color: '#3b82f6' } },
+                { y: bm.dimensions, x: gaps, name: '差距到標竿', type: 'bar', orientation: 'h', marker: { color: 'rgba(239,68,68,0.5)' } }
+            ], {
+                paper_bgcolor: 'rgba(0,0,0,0)', plot_bgcolor: 'rgba(0,0,0,0)', font: { color: '#94a3b8' },
+                margin: { t: 40, r: 20, l: 120, b: 40 }, height: 300,
+                xaxis: { gridcolor: 'rgba(255,255,255,0.06)', color: '#94a3b8', range: [0, 120] },
+                yaxis: { gridcolor: 'rgba(255,255,255,0.06)', color: '#94a3b8' },
+                barmode: 'stack', showlegend: true, legend: { font: { color: '#94a3b8' } }
+            }, { responsive: true });
+
+            // 路線圖表格
+            const roadmap = bm.dimensions.map((_, i) => ({
+                dimension: bm.dimensions[i],
+                current: bm.company[i],
+                target: bm.industryBest[i],
+                gap: bm.industryBest[i] - bm.company[i],
+                priority: bm.industryBest[i] - bm.company[i] > 15 ? '高' : bm.industryBest[i] - bm.company[i] > 8 ? '中' : '低',
+                action: ['提高庫存週轉，減少呆滯庫存', '強化供應商考核，導入備援供應商', '優化製程參數，降低不良率', '議價與替代料件評估', '分散採購來源，降低集中度'][i % 5]
+            })).sort((a, b) => b.gap - a.gap);
+
+            document.getElementById('table-bench-roadmap').innerHTML = `<table class="data-table">
+                <thead><tr><th>維度</th><th>現況</th><th>目標</th><th>差距</th><th>優先級</th><th>建議行動</th></tr></thead>
+                <tbody>${roadmap.map(r => `
+                    <tr>
+                        <td>${r.dimension}</td>
+                        <td>${r.current.toFixed(1)}</td>
+                        <td>${r.target.toFixed(1)}</td>
+                        <td style="color:${r.gap > 10 ? '#ef4444' : r.gap > 5 ? '#f59e0b' : '#10b981'}">${r.gap > 0 ? '+' : ''}${r.gap.toFixed(1)}</td>
+                        <td><span class="status-badge ${r.priority === '高' ? 'badge-danger' : r.priority === '中' ? 'badge-warning' : 'badge-success'}">${r.priority}</span></td>
+                        <td>${r.action}</td>
+                    </tr>`).join('')}
+                </tbody>
+            </table>`;
+        }
+
+        // ==================== 輔助功能 ====================
+        function toggleTheme() {
+            document.body.classList.toggle('light-mode');
+            localStorage.setItem('theme', document.body.classList.contains('light-mode') ? 'light' : 'dark');
+            renderPage(activePage);
+        }
+
+        function toggleSidebar() {
+            document.getElementById('sidebar').classList.toggle('collapsed');
+        }
+
+        function handleFileUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                if (file.name.endsWith('.json')) {
+                    currentData = JSON.parse(e.target.result);
+                    alert('資料載入成功！');
+                    renderPage(activePage);
+                } else if (file.name.match(/\.xlsx?$/)) {
+                    const wb = XLSX.read(e.target.result, { type: 'array' });
+                    wb.SheetNames.forEach(sheetName => {
+                        const data = XLSX.utils.sheet_to_json(wb.Sheets[sheetName]);
+                        currentData[sheetName === 'Materials' ? 'materials' :
+                                   sheetName === 'Suppliers' ? 'suppliers' :
+                                   sheetName === 'Products' ? 'products' :
+                                   sheetName === 'PurchaseOrders' ? 'purchaseOrders' :
+                                   sheetName === 'ProductionOrders' ? 'productionOrders' :
+                                   sheetName === 'Inventory' ? 'inventorySnapshots' : 'data'] = data;
+                    });
+                    alert('Excel 資料載入成功！');
+                    renderPage(activePage);
+                }
+            };
+            reader.readAsArrayBuffer(file);
+        }
+
+        function exportPDF() {
+            const element = document.getElementById('tab-content');
+            html2canvas(element, { backgroundColor: '#0f172a' }).then(canvas => {
+                const imgData = canvas.toDataURL('image/png');
+                const pdf = new jspdf.jsPDF('l', 'mm', 'a4');
+                const imgProps = pdf.getImageProperties(imgData);
+                const pdfWidth = pdf.internal.pageSize.getWidth();
+                const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
+                pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+                pdf.save('manufacturing-dashboard.pdf');
+            });
+        }
+
+        // 初始化
+        document.addEventListener('DOMContentLoaded', () => {
+            const savedTheme = localStorage.getItem('theme');
+            if (savedTheme === 'light') document.body.classList.add('light-mode');
+            init();
+        });
+    </script>
+</body>
+</html>
