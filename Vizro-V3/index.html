@@ -560,11 +560,11 @@
             paper_bgcolor: 'rgba(0,0,0,0)',
             plot_bgcolor: 'rgba(0,0,0,0)',
             font: { color: '#94a3b8', size: 11 },
-            margin: { t: 40, r: 20, l: 50, b: 50 },
+            margin: { t: 40, r: 20, l: 60, b: 60 },
             height: height,
-            xaxis: { gridcolor: 'rgba(255,255,255,0.06)', color: '#94a3b8', tickfont: { size: 10 } },
-            yaxis: { gridcolor: 'rgba(255,255,255,0.06)', color: '#94a3b8', tickfont: { size: 10 } },
-            showlegend: true,
+            xaxis: { gridcolor: 'rgba(255,255,255,0.06)', color: '#94a3b8', tickfont: { size: 10 }, title: { text: '', font: { size: 11, color: '#94a3b8' } } },
+            yaxis: { gridcolor: 'rgba(255,255,255,0.06)', color: '#94a3b8', tickfont: { size: 10 }, title: { text: '', font: { size: 11, color: '#94a3b8' } } },
+            showlegend: false,
             legend: { font: { color: '#94a3b8', size: 10 }, orientation: 'h', x: 0.5, xanchor: 'center', y: -0.1 }
         });
 
@@ -574,12 +574,12 @@
             if (!container || !data || !data.length) return;
             const layout = getCommonLayout(title);
             if (orientation === 'h') {
-                layout.xaxis.title = y;
-                layout.yaxis.title = x;
+                layout.xaxis.title = { text: y, font: { size: 11, color: '#94a3b8' } };
+                layout.yaxis.title = { text: x, font: { size: 11, color: '#94a3b8' } };
                 layout.yaxis.side = 'left';
             } else {
-                layout.xaxis.title = x;
-                layout.yaxis.title = y;
+                layout.xaxis.title = { text: x, font: { size: 11, color: '#94a3b8' } };
+                layout.yaxis.title = { text: y, font: { size: 11, color: '#94a3b8' } };
             }
             const chartData = [{
                 x: orientation === 'h' ? data.map(d => d[y]) : data.map(d => d[x]),
@@ -589,7 +589,11 @@
                 marker: { color: Array.isArray(color) ? color : color, line: { color: 'transparent', width: 0 } },
                 text: orientation === 'h' ? data.map(d => d[y]) : data.map(d => d[y]),
                 textposition: 'outside',
-                textfont: { color: '#94a3b8', size: 10 }
+                textfont: { color: '#94a3b8', size: 10 },
+                hovertemplate: orientation === 'h'
+                    ? `<b>%{y}</b><br>${y}: %{x}<extra></extra>`
+                    : `<b>%{x}</b><br>${y}: %{y}<extra></extra>`,
+                hoverlabel: { bgcolor: 'rgba(30,30,40,0.9)', bordercolor: 'transparent', font: { color: '#fff', size: 12 } }
             }];
             Plotly.newPlot(container, chartData, layout, { responsive: true });
         }
@@ -618,7 +622,10 @@
                 marker: { colors: ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#0ea5e9', '#ec4899', '#14b8a6'] },
                 textinfo: 'label+percent',
                 textfont: { color: '#fff', size: 10 },
-                hovertemplate: '%{label}<br>%{percent}<extra></extra>'
+                hovertemplate: '%{label}<br>%{percent}<extra></extra>',
+                hoverlabel: { bgcolor: 'rgba(30,30,40,0.9)', bordercolor: 'transparent', font: { color: '#fff', size: 12 } },
+                showlegend: true,
+                legend: { font: { color: '#94a3b8', size: 10 }, orientation: 'h', x: 0.5, xanchor: 'center', y: -0.1 }
             }], {
                 title: { text: title, font: { size: 14, color: '#94a3b8' } },
                 paper_bgcolor: 'rgba(0,0,0,0)',
@@ -641,7 +648,9 @@
                 fillcolor: 'rgba(59, 130, 246, 0.3)',
                 line: { color: '#3b82f6', width: 2 },
                 marker: { color: '#3b82f6', size: 6 },
-                hovertemplate: '%{theta}<br>%{r}<extra></extra>'
+                hovertemplate: '%{theta}<br>%{r}<extra></extra>',
+                hoverlabel: { bgcolor: 'rgba(30,30,40,0.9)', bordercolor: 'transparent', font: { color: '#fff', size: 12 } },
+                showlegend: false
             }], {
                 title: { text: title, font: { size: 14, color: '#94a3b8' } },
                 paper_bgcolor: 'rgba(0,0,0,0)',
@@ -674,7 +683,9 @@
                     line: { color: '#3b82f6', width: 2 },
                     marker: { size: 5, color: '#3b82f6' },
                     fill: 'tozeroy',
-                    fillcolor: 'rgba(59, 130, 246, 0.15)'
+                    fillcolor: 'rgba(59, 130, 246, 0.15)',
+                    hovertemplate: `<b>${y}</b><br>%{x}<br>%{y}<extra></extra>`,
+                    hoverlabel: { bgcolor: 'rgba(30,30,40,0.9)', bordercolor: 'transparent', font: { color: '#fff', size: 12 } }
                 }];
             }
             Plotly.newPlot(container, traces, layout, { responsive: true });
@@ -693,7 +704,9 @@
                 type: 'scatter',
                 mode: 'lines+markers',
                 line: { color: colors[i % colors.length], width: 2 },
-                marker: { size: 4 }
+                marker: { size: 4 },
+                hovertemplate: `<b>${s.label}</b><br>%{x}<br>%{y}<extra></extra>`,
+                hoverlabel: { bgcolor: 'rgba(30,30,40,0.9)', bordercolor: 'transparent', font: { color: '#fff', size: 12 } }
             }));
             Plotly.newPlot(container, traces, layout, { responsive: true });
         }
@@ -711,7 +724,9 @@
                 marker: {
                     size: sizeKey ? data.map(d => Math.max(8, Math.min(25, d[sizeKey] / 10))) : 12,
                     opacity: 0.75
-                }
+                },
+                hovertemplate: `<b>%{x}</b><br>${y}: %{y}<extra></extra>`,
+                hoverlabel: { bgcolor: 'rgba(30,30,40,0.9)', bordercolor: 'transparent', font: { color: '#fff', size: 12 } }
             };
             if (colorKey) {
                 trace.marker.color = data.map(d => d[colorKey]);
@@ -736,7 +751,9 @@
                 name: s.label,
                 type: 'bar',
                 marker: { color: colors[i % colors.length] },
-                stackgroup: 'one'
+                stackgroup: 'one',
+                hovertemplate: `<b>${s.label}</b><br>%{x}<br>%{y}<extra></extra>`,
+                hoverlabel: { bgcolor: 'rgba(30,30,40,0.9)', bordercolor: 'transparent', font: { color: '#fff', size: 12 } }
             }));
             Plotly.newPlot(container, traces, layout, { responsive: true });
         }
@@ -755,7 +772,9 @@
                 marker: { color: colors },
                 text: values.map(v => (v >= 0 ? '+' : '') + v.toFixed(0)),
                 textposition: 'outside',
-                textfont: { color: '#94a3b8', size: 10 }
+                textfont: { color: '#94a3b8', size: 10 },
+                hovertemplate: `<b>%{x}</b><br>%{y}<extra></extra>`,
+                hoverlabel: { bgcolor: 'rgba(30,30,40,0.9)', bordercolor: 'transparent', font: { color: '#fff', size: 12 } }
             }];
             Plotly.newPlot(container, traces, layout, { responsive: true });
         }
@@ -852,7 +871,7 @@
 
             // 渲染圖表
             if (materials.length) {
-                createBarChart(materials.slice(0, 10), 'name', 'stockQty', '材料庫存分布', '#3b82f6', 'v', 'chart-overview-stock');
+                createBarChart(materials.slice(0, 10), 'name', 'stockQty', '材料庫存分布', '#3b82f6', 'h', 'chart-overview-stock');
             }
             if (suppliers.length) {
                 createBarChart(suppliers.slice(0, 10), 'name', 'compositeScore', '供應商評分', '#8b5cf6', 'v', 'chart-overview-supplier');
