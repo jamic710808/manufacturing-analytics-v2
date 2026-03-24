@@ -1,0 +1,29 @@
+{
+  "name": "@mfg-dashboard/page-production",
+  "version": "1.0.0",
+  "description": "生產與品質分析頁面 - OEE設備效率、生產良率、製程能力",
+  "main": "src/index.tsx",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "echarts": "^5.4.3",
+    "echarts-for-react": "^3.0.2",
+    "single-spa": "^5.9.5",
+    "single-spa-react": "^4.6.1"
+  },
+  "devDependencies": {
+    "@rollup/plugin-replace": "^6.0.3",
+    "@types/react": "^18.2.45",
+    "@types/react-dom": "^18.2.18",
+    "@vitejs/plugin-react": "^4.2.1",
+    "typescript": "^5.3.3",
+    "vite": "^5.0.10",
+    "vite-plugin-single-spa": "^1.1.0"
+  }
+}

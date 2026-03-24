@@ -1,0 +1,2292 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>製造業分析儀表板 V3 | Manufacturing Analytics</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0"></script>
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <style>
+        /* ===== CSS 變數：深色主題（預設）===== */
+        :root {
+            --bg-base: #0f172a;
+            --bg-surface: rgba(30, 41, 59, 0.6);
+            --glass-bg: rgba(30, 41, 59, 0.6);
+            --glass-border: rgba(255, 255, 255, 0.08);
+            --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+            --text-primary: #f8fafc;
+            --text-secondary: #94a3b8;
+            --text-muted: #64748b;
+            --accent: #3b82f6;
+            --accent-hover: #2563eb;
+            --accent-glow: rgba(59, 130, 246, 0.3);
+            --success: #10b981;
+            --danger: #ef4444;
+            --warning: #f59e0b;
+            --info: #0ea5e9;
+            --purple: #8b5cf6;
+            --sidebar-width: 260px;
+            --topbar-height: 72px;
+            --chart-grid: rgba(255, 255, 255, 0.06);
+            --table-hover: rgba(255, 255, 255, 0.02);
+            --table-header-bg: rgba(30, 41, 59, 0.9);
+            --scrollbar-thumb: rgba(255, 255, 255, 0.2);
+            --modal-backdrop: rgba(0, 0, 0, 0.6);
+        }
+        /* ===== 淺色主題（淡米白色）===== */
+        body.light-mode {
+            --bg-base: #faf7f2;
+            --bg-surface: rgba(255, 252, 247, 0.85);
+            --glass-bg: rgba(255, 251, 245, 0.75);
+            --glass-border: rgba(180, 160, 130, 0.15);
+            --glass-shadow: 0 4px 16px 0 rgba(120, 100, 70, 0.08);
+            --text-primary: #2c2418;
+            --text-secondary: #7a6e5e;
+            --text-muted: #a89e8e;
+            --chart-grid: rgba(120, 100, 70, 0.08);
+            --table-hover: rgba(180, 160, 130, 0.06);
+            --table-header-bg: rgba(245, 240, 230, 0.95);
+            --scrollbar-thumb: rgba(120, 100, 70, 0.25);
+            --modal-backdrop: rgba(40, 30, 15, 0.4);
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg-base);
+            background-image:
+                radial-gradient(at 10% 20%, rgba(59,130,246,0.12) 0px, transparent 40%),
+                radial-gradient(at 90% 80%, rgba(139,92,246,0.12) 0px, transparent 40%),
+                radial-gradient(at 50% 50%, rgba(16,185,129,0.05) 0px, transparent 50%);
+            background-attachment: fixed;
+            color: var(--text-primary);
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+            transition: background-color 0.3s, color 0.3s;
+        }
+        body.light-mode {
+            background-image:
+                radial-gradient(at 10% 20%, rgba(210,180,140,0.10) 0px, transparent 40%),
+                radial-gradient(at 90% 80%, rgba(180,150,110,0.08) 0px, transparent 40%);
+        }
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { opacity: 0.8; }
+
+        /* ===== Glass Panel ===== */
+        .glass-panel {
+            background: var(--glass-bg);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid var(--glass-border);
+            border-radius: 16px;
+            box-shadow: var(--glass-shadow);
+            transition: background 0.3s, border-color 0.3s;
+        }
+
+        /* ===== Sidebar ===== */
+        .sidebar {
+            width: var(--sidebar-width);
+            height: 100vh;
+            padding: 24px 16px;
+            display: flex;
+            flex-direction: column;
+            border-right: 1px solid var(--glass-border);
+            background: rgba(15,23,42,0.7);
+            backdrop-filter: blur(20px);
+            z-index: 10;
+            flex-shrink: 0;
+            transition: width 0.3s, background 0.3s;
+        }
+        body.light-mode .sidebar { background: rgba(250, 245, 235, 0.92); }
+        .sidebar.collapsed { width: 60px; padding: 24px 8px; }
+        .sidebar.collapsed .sidebar-header h1,
+        .sidebar.collapsed .sidebar-header p,
+        .sidebar.collapsed .nav-group-title,
+        .sidebar.collapsed .nav-item span { display: none; }
+        .sidebar.collapsed .nav-item { justify-content: center; padding: 10px; }
+        .sidebar-header { margin-bottom: 24px; padding: 0 12px; }
+        .sidebar-header h1 {
+            font-size: 1.25rem; font-weight: 700;
+            background: linear-gradient(to right, #60a5fa, #a855f7);
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+            line-height: 1.4;
+        }
+        .sidebar-header p { font-size: 0.75rem; color: var(--text-secondary); margin-top: 4px; letter-spacing: 0.5px; }
+        .nav-menu { display: flex; flex-direction: column; gap: 4px; overflow-y: auto; flex: 1; padding-right: 4px; }
+        .nav-group-title {
+            font-size: 0.7rem; text-transform: uppercase; color: var(--text-secondary);
+            font-weight: 600; letter-spacing: 1px; margin: 16px 0 8px 12px;
+        }
+        .nav-item {
+            display: flex; align-items: center; gap: 12px; padding: 10px 14px;
+            border-radius: 10px; color: var(--text-secondary); text-decoration: none;
+            cursor: pointer; transition: all 0.2s ease; font-size: 0.875rem;
+            font-weight: 500; border: 1px solid transparent;
+        }
+        .nav-item:hover { color: var(--text-primary); background: rgba(255,255,255,0.05); }
+        body.light-mode .nav-item:hover { background: rgba(180,160,130,0.08); }
+        .nav-item.active {
+            color: #fff; background: rgba(59,130,246,0.15);
+            border-color: rgba(59,130,246,0.3); box-shadow: inset 0 0 12px rgba(59,130,246,0.1);
+        }
+        body.light-mode .nav-item.active { color: var(--accent); background: rgba(59,130,246,0.06); }
+        .nav-icon { width: 18px; height: 18px; fill: currentColor; opacity: 0.8; flex-shrink: 0; }
+        .nav-item.active .nav-icon { opacity: 1; color: var(--accent); }
+
+        /* ===== Main Content ===== */
+        .main-content { flex: 1; height: 100vh; display: flex; flex-direction: column; overflow: hidden; position: relative; }
+        .topbar {
+            height: var(--topbar-height); padding: 0 32px;
+            display: flex; justify-content: space-between; align-items: center;
+            border-bottom: 1px solid var(--glass-border);
+            background: rgba(15,23,42,0.4); backdrop-filter: blur(10px);
+            z-index: 5; flex-shrink: 0; transition: background 0.3s;
+        }
+        body.light-mode .topbar { background: rgba(250, 245, 235, 0.7); }
+        .page-title { font-size: 1.5rem; font-weight: 600; display: flex; align-items: center; gap: 12px; }
+        .page-title-icon { width: 24px; height: 24px; color: var(--accent); }
+        .controls { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+        .controls .date-filter { display: flex; align-items: center; gap: 6px; }
+        .controls .date-filter input[type="date"] {
+            padding: 6px 10px; border-radius: 8px; border: 1px solid var(--glass-border);
+            background: rgba(255,255,255,0.05); color: var(--text-primary);
+            font-size: 0.8rem; font-family: inherit;
+        }
+        body.light-mode .controls .date-filter input[type="date"] { background: rgba(180,160,130,0.08); color: var(--text-primary); }
+        .controls .date-filter label { font-size: 0.75rem; color: var(--text-secondary); }
+        /* ===== Buttons ===== */
+        .btn {
+            padding: 8px 16px; border-radius: 8px; border: 1px solid var(--glass-border);
+            background: rgba(255,255,255,0.05); color: var(--text-primary);
+            font-size: 0.8rem; font-weight: 500; cursor: pointer;
+            transition: all 0.2s; display: flex; align-items: center; gap: 6px; font-family: inherit;
+        }
+        body.light-mode .btn { background: rgba(180,160,130,0.08); }
+        .btn:hover { background: rgba(255,255,255,0.1); border-color: rgba(255,255,255,0.2); }
+        body.light-mode .btn:hover { background: rgba(180,160,130,0.15); }
+        .btn-primary { background: var(--accent); border-color: var(--accent); color: white; box-shadow: 0 0 15px rgba(59,130,246,0.3); }
+        .btn-primary:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
+        .btn-icon { padding: 8px; }
+        .btn svg { width: 16px; height: 16px; fill: currentColor; }
+        input[type="file"] { display: none; }
+        .btn-toggle-theme {
+            width: 36px; height: 36px; border-radius: 50%; padding: 0;
+            display: flex; align-items: center; justify-content: center;
+        }
+        .btn-sidebar-toggle {
+            width: 36px; height: 36px; border-radius: 50%; padding: 0;
+            display: flex; align-items: center; justify-content: center;
+            position: absolute; top: 50%; left: -18px; transform: translateY(-50%);
+            z-index: 11; background: var(--accent); border: none; color: white;
+        }
+        /* ===== Export Dropdown ===== */
+        .export-dropdown { position: relative; }
+        .export-menu {
+            display: none; position: absolute; top: 100%; right: 0; margin-top: 4px;
+            min-width: 160px; border-radius: 10px; padding: 6px; z-index: 20;
+        }
+        .export-menu.show { display: block; }
+        .export-menu-item {
+            display: flex; align-items: center; gap: 8px; padding: 8px 12px;
+            border-radius: 6px; cursor: pointer; font-size: 0.8rem; color: var(--text-primary);
+            transition: background 0.15s;
+        }
+        .export-menu-item:hover { background: rgba(255,255,255,0.08); }
+        body.light-mode .export-menu-item:hover { background: rgba(180,160,130,0.10); }
+
+        /* ===== Dashboard Container ===== */
+        .dashboard-container { flex: 1; padding: 24px 32px; overflow-y: auto; scroll-behavior: smooth; }
+        .tab-pane { display: none; animation: fadeIn 0.4s ease forwards; opacity: 0; transform: translateY(10px); }
+        .tab-pane.active { display: block; }
+        @keyframes fadeIn { to { opacity: 1; transform: translateY(0); } }
+
+        /* ===== Grid Layouts ===== */
+        .grid-kpi { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 20px; margin-bottom: 24px; }
+        .kpi-card { padding: 20px; display: flex; flex-direction: column; gap: 8px; position: relative; overflow: hidden; transition: transform 0.2s ease; }
+        .kpi-card:hover { transform: translateY(-2px); }
+        .kpi-card::before { content: ''; position: absolute; top: 0; left: 0; width: 4px; height: 100%; background: var(--accent); border-radius: 4px 0 0 4px; }
+        .kpi-card.kpi-success::before { background: var(--success); }
+        .kpi-card.kpi-danger::before { background: var(--danger); }
+        .kpi-card.kpi-warning::before { background: var(--warning); }
+        .kpi-card.kpi-purple::before { background: var(--purple); }
+        .kpi-card.kpi-info::before { background: var(--info); }
+        .kpi-title { font-size: 0.8rem; color: var(--text-secondary); font-weight: 500; }
+        .kpi-value { font-size: 1.75rem; font-weight: 700; color: var(--text-primary); letter-spacing: -0.5px; }
+        .kpi-sub { font-size: 0.75rem; display: flex; align-items: center; gap: 6px; color: var(--text-secondary); margin-top: 4px; }
+        .trend-up { color: var(--danger); display: flex; align-items: center; gap: 2px; }
+        .trend-down { color: var(--success); display: flex; align-items: center; gap: 2px; }
+        .trend-up.good { color: var(--success); }
+        .trend-down.bad { color: var(--danger); }
+
+        .grid-charts { display: grid; grid-template-columns: repeat(2, 1fr); gap: 24px; margin-bottom: 24px; }
+        .grid-charts.full { grid-template-columns: 1fr; }
+        .grid-charts.split-3 { grid-template-columns: repeat(3, 1fr); }
+        .grid-charts.asym { grid-template-columns: 2fr 1fr; }
+        .chart-card { padding: 20px; min-height: 380px; display: flex; flex-direction: column; }
+        .chart-header { margin-bottom: 16px; display: flex; justify-content: space-between; align-items: center; }
+        .chart-title { font-size: 1rem; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+        .chart-subtitle { font-size: 0.75rem; color: var(--text-secondary); font-weight: normal; margin-left: 8px; }
+        .chart-container { flex: 1; position: relative; width: 100%; height: 100%; min-height: 250px; }
+
+        /* ===== Tables ===== */
+        .table-container { flex: 1; overflow-y: auto; margin-top: 10px; }
+        table { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
+        th { text-align: left; padding: 10px 12px; color: var(--text-secondary); font-weight: 500; border-bottom: 1px solid var(--glass-border); position: sticky; top: 0; background: var(--table-header-bg); backdrop-filter: blur(4px); }
+        td { padding: 10px 12px; border-bottom: 1px solid rgba(255,255,255,0.05); color: var(--text-primary); }
+        body.light-mode td { border-bottom-color: rgba(180,160,130,0.10); }
+        tr:hover td { background: var(--table-hover); }
+        tr.clickable { cursor: pointer; }
+        .status-badge { padding: 4px 8px; border-radius: 4px; font-size: 0.7rem; font-weight: 500; }
+        .badge-success { background: rgba(16,185,129,0.2); color: #34d399; }
+        .badge-warning { background: rgba(245,158,11,0.2); color: #fbbf24; }
+        .badge-danger { background: rgba(239,68,68,0.2); color: #f87171; }
+        .badge-info { background: rgba(14,165,233,0.2); color: #38bdf8; }
+        .badge-preferred { background: rgba(16,185,129,0.15); color: #34d399; border: 1px solid rgba(16,185,129,0.3); }
+        .badge-approved { background: rgba(245,158,11,0.15); color: #fbbf24; border: 1px solid rgba(245,158,11,0.3); }
+        .badge-at-risk { background: rgba(239,68,68,0.15); color: #f87171; border: 1px solid rgba(239,68,68,0.3); }
+        /* ===== Anomaly Traffic Lights ===== */
+        .traffic-lights { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin-bottom: 24px; }
+        .traffic-card { padding: 24px; text-align: center; position: relative; overflow: hidden; }
+        .traffic-card .light {
+            width: 64px; height: 64px; border-radius: 50%; margin: 0 auto 16px;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 1.5rem; font-weight: 700; color: white;
+        }
+        .light-green { background: radial-gradient(circle, #34d399, #059669); box-shadow: 0 0 24px rgba(16,185,129,0.4); }
+        .light-yellow { background: radial-gradient(circle, #fbbf24, #d97706); box-shadow: 0 0 24px rgba(245,158,11,0.4); }
+        .light-red { background: radial-gradient(circle, #f87171, #dc2626); box-shadow: 0 0 24px rgba(239,68,68,0.4); }
+        .traffic-card .domain-name { font-size: 1rem; font-weight: 600; margin-bottom: 4px; }
+        .traffic-card .domain-score { font-size: 0.8rem; color: var(--text-secondary); }
+
+        /* ===== Heatmap Table ===== */
+        .heatmap-cell { padding: 8px 12px; text-align: center; font-weight: 500; font-size: 0.8rem; border-radius: 4px; }
+
+        /* ===== Drill-Down Modal ===== */
+        .drill-modal-backdrop {
+            display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: var(--modal-backdrop); z-index: 100; align-items: center; justify-content: center;
+        }
+        .drill-modal-backdrop.show { display: flex; }
+        .drill-modal {
+            width: 80%; max-width: 900px; max-height: 80vh; border-radius: 16px; padding: 24px;
+            display: flex; flex-direction: column; overflow: hidden;
+        }
+        .drill-modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+        .drill-modal-header h3 { font-size: 1.1rem; font-weight: 600; }
+        .drill-modal-close { cursor: pointer; padding: 4px 8px; border-radius: 6px; border: none; background: rgba(255,255,255,0.1); color: var(--text-primary); font-size: 1.2rem; }
+        .drill-modal-body { flex: 1; overflow-y: auto; }
+
+        /* ===== Validation Modal ===== */
+        .validation-report { padding: 16px; }
+        .validation-item { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--glass-border); }
+        .validation-icon { font-size: 1.2rem; }
+
+        /* ===== DAX Knowledge Base ===== */
+        .dax-search { width: 100%; padding: 10px 16px; border-radius: 10px; border: 1px solid var(--glass-border); background: rgba(255,255,255,0.05); color: var(--text-primary); font-size: 0.9rem; font-family: inherit; margin-bottom: 16px; }
+        body.light-mode .dax-search { background: rgba(180,160,130,0.08); }
+        .dax-tabs { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
+        .dax-tab { padding: 6px 14px; border-radius: 20px; border: 1px solid var(--glass-border); background: transparent; color: var(--text-secondary); cursor: pointer; font-size: 0.8rem; transition: all 0.2s; }
+        .dax-tab.active { background: var(--accent); color: white; border-color: var(--accent); }
+        .dax-card { padding: 16px; margin-bottom: 12px; border-radius: 12px; }
+        .dax-card h4 { font-size: 0.9rem; font-weight: 600; margin-bottom: 8px; color: var(--accent); }
+        .dax-card pre { background: rgba(0,0,0,0.3); padding: 12px; border-radius: 8px; font-size: 0.8rem; overflow-x: auto; color: #e2e8f0; line-height: 1.5; }
+        body.light-mode .dax-card pre { background: rgba(180,160,130,0.08); color: #3d3425; }
+        .dax-card .dax-explain { font-size: 0.8rem; color: var(--text-secondary); margin-top: 8px; line-height: 1.6; }
+
+        /* ===== Forecast ===== */
+        .forecast-info { display: flex; gap: 16px; margin-bottom: 16px; flex-wrap: wrap; }
+        .forecast-stat { padding: 12px 16px; border-radius: 10px; flex: 1; min-width: 150px; }
+        .forecast-stat .label { font-size: 0.75rem; color: var(--text-secondary); }
+        .forecast-stat .value { font-size: 1.2rem; font-weight: 600; margin-top: 4px; }
+
+        /* ===== Responsive ===== */
+        @media (max-width: 1200px) {
+            .grid-charts { grid-template-columns: 1fr; }
+            .grid-charts.split-3 { grid-template-columns: 1fr; }
+            .grid-charts.asym { grid-template-columns: 1fr; }
+            .traffic-lights { grid-template-columns: 1fr; }
+        }
+        @media (max-width: 768px) {
+            .sidebar { display: none; }
+            .topbar { padding: 0 16px; }
+            .dashboard-container { padding: 16px; }
+            .controls { gap: 4px; }
+        }
+
+        /* 匯出模式：所有背景強制不透明純色，解決 html2canvas 透明渲染問題 */
+        body.export-mode,
+        body.export-mode *,
+        body.export-mode *::before,
+        body.export-mode *::after {
+            backdrop-filter: none !important;
+            -webkit-backdrop-filter: none !important;
+            box-shadow: none !important;
+            transition: none !important;
+            animation: none !important;
+        }
+        body.export-mode { background-image: none !important; }
+        body.export-mode .tab-pane.active { opacity: 1 !important; transform: none !important; }
+        body.export-mode .dashboard-container { background: #0f172a !important; }
+        body.export-mode .glass-panel,
+        body.export-mode .kpi-card,
+        body.export-mode .chart-card { background: #1e293b !important; border: 1px solid #334155 !important; }
+        body.export-mode th { background: #1e293b !important; }
+        body.export-mode td { background: #0f172a !important; }
+        body.export-mode .traffic-card { background: #1e293b !important; }
+        body.export-mode .dax-card { background: #1e293b !important; }
+        body.export-mode .dax-card pre { background: #0f172a !important; }
+        body.export-mode .forecast-stat { background: #1e293b !important; }
+        body.export-mode .heatmap-cell { opacity: 1 !important; }
+
+        /* 淺色匯出模式 */
+        body.light-mode.export-mode .dashboard-container { background: #faf7f2 !important; }
+        body.light-mode.export-mode .glass-panel,
+        body.light-mode.export-mode .kpi-card,
+        body.light-mode.export-mode .chart-card { background: #fff8ee !important; border: 1px solid #e0d5c5 !important; }
+        body.light-mode.export-mode th { background: #f0e8da !important; }
+        body.light-mode.export-mode td { background: #faf7f2 !important; }
+        body.light-mode.export-mode .traffic-card { background: #fff8ee !important; }
+        body.light-mode.export-mode .dax-card { background: #fff8ee !important; }
+        body.light-mode.export-mode .dax-card pre { background: #f5efe5 !important; }
+        body.light-mode.export-mode .forecast-stat { background: #fff8ee !important; }
+
+        /* ===== V3 New Tab Styles ===== */
+        .iron-triangle-container { display: flex; justify-content: center; align-items: center; gap: 40px; flex-wrap: wrap; margin-bottom: 24px; }
+        .iron-triangle-svg { width: 400px; height: 380px; flex-shrink: 0; }
+        .iron-triangle-svg text { font-family: 'Inter', sans-serif; }
+        .vertex-score { cursor: pointer; transition: transform 0.3s; }
+        .vertex-score:hover { filter: brightness(1.2); }
+        .triangle-kpis { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin-bottom: 24px; }
+        @media (max-width: 1200px) { .triangle-kpis { grid-template-columns: 1fr; } }
+        .gauge-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin-bottom: 24px; }
+        .gauge-widget { padding: 24px; text-align: center; position: relative; }
+        .gauge-widget canvas { max-width: 200px; max-height: 200px; margin: 0 auto; }
+        .gauge-label { font-size: 0.85rem; color: var(--text-secondary); margin-top: 8px; }
+        .gauge-value-text { font-size: 1.5rem; font-weight: 700; margin-top: 4px; }
+        .gauge-sparkline { display: flex; align-items: end; justify-content: center; gap: 2px; height: 24px; margin-top: 8px; }
+        .gauge-sparkline .spark-bar { width: 4px; border-radius: 2px; background: var(--accent); transition: height 0.3s; }
+        @media (max-width: 1200px) { .gauge-grid { grid-template-columns: repeat(2, 1fr); } }
+        .insight-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; margin-top: 24px; }
+        .insight-card { padding: 16px; border-left: 3px solid var(--accent); }
+        .insight-card .insight-icon { font-size: 1.2rem; margin-bottom: 6px; }
+        .insight-card .insight-text { font-size: 0.8rem; color: var(--text-secondary); line-height: 1.6; }
+        .insight-card .insight-title { font-size: 0.9rem; font-weight: 600; margin-bottom: 8px; }
+        .traffic-summary-bar { display: flex; gap: 12px; margin-bottom: 20px; padding: 12px 16px; border-radius: 12px; align-items: center; }
+        .traffic-summary-item { display: flex; align-items: center; gap: 6px; font-size: 0.85rem; }
+        .traffic-dot { width: 12px; height: 12px; border-radius: 50%; }
+        .traffic-dot.green { background: var(--success); box-shadow: 0 0 8px rgba(16,185,129,0.4); }
+        .traffic-dot.yellow { background: var(--warning); box-shadow: 0 0 8px rgba(245,158,11,0.4); }
+        .traffic-dot.red { background: var(--danger); box-shadow: 0 0 8px rgba(239,68,68,0.4); }
+        .vsm-container { overflow-x: auto; padding: 20px 0; }
+        .vsm-flow { display: flex; align-items: center; gap: 0; min-width: 900px; padding: 0 20px; }
+        .vsm-node { background: var(--glass-bg); border: 1px solid var(--glass-border); border-radius: 12px; padding: 16px; min-width: 110px; text-align: center; position: relative; transition: all 0.3s; flex-shrink: 0; }
+        .vsm-node.bottleneck { border-color: var(--danger); box-shadow: 0 0 16px rgba(239,68,68,0.3); }
+        .vsm-node .node-title { font-size: 0.75rem; font-weight: 600; margin-bottom: 8px; color: var(--text-primary); }
+        .vsm-node .node-metric { font-size: 0.7rem; color: var(--text-secondary); line-height: 1.5; }
+        .vsm-node .node-metric b { color: var(--text-primary); }
+        .vsm-arrow { width: 40px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+        .vsm-arrow svg { width: 32px; height: 20px; color: var(--text-muted); }
+        .vsm-arrow.animated svg { animation: arrowPulse 1.5s ease-in-out infinite; }
+        @keyframes arrowPulse { 0%,100% { opacity: 0.4; } 50% { opacity: 1; } }
+        .vsm-timeline { margin-top: 20px; padding: 16px; border-radius: 12px; }
+        .vsm-timeline-bar { height: 8px; border-radius: 4px; background: var(--glass-border); overflow: hidden; display: flex; margin-top: 8px; }
+        .vsm-timeline-bar .segment { height: 100%; transition: width 0.5s; }
+        .vsm-efficiency { display: flex; gap: 24px; margin-top: 16px; }
+        .vsm-efficiency .stat { text-align: center; flex: 1; }
+        .vsm-efficiency .stat-value { font-size: 1.5rem; font-weight: 700; }
+        .vsm-efficiency .stat-label { font-size: 0.75rem; color: var(--text-secondary); }
+        .simulator-controls { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin-bottom: 24px; }
+        .sim-slider-group { padding: 16px; border-radius: 12px; }
+        .sim-slider-group label { font-size: 0.8rem; color: var(--text-secondary); display: block; margin-bottom: 8px; }
+        .sim-slider-group .sim-value { font-size: 1.2rem; font-weight: 700; color: var(--accent); text-align: center; margin-bottom: 4px; }
+        .sim-slider-group input[type="range"] { width: 100%; accent-color: var(--accent); cursor: pointer; }
+        .sim-summary { padding: 20px; border-radius: 12px; text-align: center; margin-bottom: 24px; }
+        .sim-summary .big-number { font-size: 2rem; font-weight: 700; }
+        .sim-summary .sub-text { font-size: 0.8rem; color: var(--text-secondary); margin-top: 4px; }
+        @media (max-width: 1200px) { .simulator-controls { grid-template-columns: 1fr; } }
+        .risk-matrix-container { position: relative; }
+        .quadrant-layout { display: grid; grid-template-columns: 3fr 1fr; gap: 20px; margin-bottom: 24px; }
+        .quadrant-side { display: flex; flex-direction: column; gap: 12px; }
+        .quadrant-stat { padding: 12px; border-radius: 10px; }
+        .quadrant-stat .q-label { font-size: 0.75rem; color: var(--text-secondary); }
+        .quadrant-stat .q-value { font-size: 1rem; font-weight: 600; margin-top: 2px; }
+        .quadrant-stat .q-count { font-size: 0.7rem; color: var(--text-muted); margin-top: 2px; }
+        @media (max-width: 1200px) { .quadrant-layout { grid-template-columns: 1fr; } }
+        .cash-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; margin-bottom: 24px; }
+
+        body.export-mode .sim-slider-group,
+        body.export-mode .sim-summary,
+        body.export-mode .gauge-widget,
+        body.export-mode .insight-card,
+        body.export-mode .quadrant-stat,
+        body.export-mode .vsm-node,
+        body.export-mode .vsm-timeline,
+        body.export-mode .traffic-summary-bar { background: #1e293b !important; border: 1px solid #334155 !important; }
+        body.light-mode.export-mode .sim-slider-group,
+        body.light-mode.export-mode .sim-summary,
+        body.light-mode.export-mode .gauge-widget,
+        body.light-mode.export-mode .insight-card,
+        body.light-mode.export-mode .quadrant-stat,
+        body.light-mode.export-mode .vsm-node,
+        body.light-mode.export-mode .vsm-timeline,
+        body.light-mode.export-mode .traffic-summary-bar { background: #fff8ee !important; border: 1px solid #e0d5c5 !important; }
+    </style>
+</head>
+<body>
+    <!-- ===== Sidebar ===== -->
+    <aside class="sidebar" id="sidebar">
+        <div class="sidebar-header">
+            <h1>Mfg Analytics</h1>
+            <p>製造業分析儀表板 V3.0</p>
+        </div>
+        <div class="nav-menu">
+            <a class="nav-item active" data-target="tab-overview">
+                <svg class="nav-icon" viewBox="0 0 24 24"><path d="M3 13h8V3H3v10zm0 8h8v-6H3v6zm10 0h8V11h-8v10zm0-18v6h8V3h-8z"/></svg>
+                <span>1. 首頁總覽</span>
+            </a>
+            <a class="nav-item" data-target="tab-anomaly">
+                <svg class="nav-icon" viewBox="0 0 24 24"><path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/></svg>
+                <span>2. 異常預警雷達</span>
+            </a>
+            <div class="nav-group-title">庫存分析 (Inventory)</div>
+            <a class="nav-item" data-target="tab-inv-efficiency">
+                <svg class="nav-icon" viewBox="0 0 24 24"><path d="M19 15v4H5v-4h14m1-2H4c-.55 0-1 .45-1 1v6c0 .55.45 1 1 1h16c.55 0 1-.45 1-1v-6c0-.55-.45-1-1-1zM7 18.5c-.82 0-1.5-.67-1.5-1.5s.68-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zM19 5v4H5V5h14m1-2H4c-.55 0-1 .45-1 1v6c0 .55.45 1 1 1h16c.55 0 1-.45 1-1V4c0-.55-.45-1-1-1zM7 8.5c-.82 0-1.5-.67-1.5-1.5S6.18 5.5 7 5.5s1.5.68 1.5 1.5S7.83 8.5 7 8.5z"/></svg>
+                <span>3. 庫存效能</span>
+            </a>
+            <a class="nav-item" data-target="tab-inv-risk">
+                <svg class="nav-icon" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg>
+                <span>4. 呆滯與風險</span>
+            </a>
+            <div class="nav-group-title">供應商分析 (Supplier)</div>
+            <a class="nav-item" data-target="tab-sup-price">
+                <svg class="nav-icon" viewBox="0 0 24 24"><path d="M11.8 10.9c-2.27-.59-3-1.2-3-2.15 0-1.09 1.01-1.85 2.7-1.85 1.78 0 2.44.85 2.5 2.1h2.21c-.07-1.72-1.12-3.3-3.21-3.81V3h-3v2.16c-1.94.42-3.5 1.68-3.5 3.61 0 2.31 1.91 3.46 4.7 4.13 2.5.6 3 1.48 3 2.41 0 .69-.49 1.79-2.7 1.79-2.06 0-2.87-.92-2.98-2.1h-2.2c.12 2.19 1.76 3.42 3.68 3.83V21h3v-2.15c1.95-.37 3.5-1.5 3.5-3.55 0-2.84-2.43-3.81-4.7-4.4z"/></svg>
+                <span>5. 價格與降本</span>
+            </a>
+            <a class="nav-item" data-target="tab-sup-time">
+                <svg class="nav-icon" viewBox="0 0 24 24"><path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z"/></svg>
+                <span>6. 採購時效與交期</span>
+            </a>
+            <a class="nav-item" data-target="tab-sup-perf">
+                <svg class="nav-icon" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+                <span>7. 供應商評分卡</span>
+            </a>
+            <div class="nav-group-title">成本分析 (Cost)</div>
+            <a class="nav-item" data-target="tab-cost-bom">
+                <svg class="nav-icon" viewBox="0 0 24 24"><path d="M10 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z"/></svg>
+                <span>8. BOM 結構解析</span>
+            </a>
+            <a class="nav-item" data-target="tab-cost-yield">
+                <svg class="nav-icon" viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-2 10h-4v4h-2v-4H7v-2h4V7h2v4h4v2z"/></svg>
+                <span>9. 生產數據與良率</span>
+            </a>
+            <a class="nav-item" data-target="tab-cost-struct">
+                <svg class="nav-icon" viewBox="0 0 24 24"><path d="M11 2v20c-5.07-.5-9-4.79-9-10s3.93-9.5 9-10zm2.03 0v8.99H22c-.47-4.74-4.24-8.52-8.97-8.99zm0 11.01V22c4.74-.47 8.5-4.25 8.97-8.99h-8.97z"/></svg>
+                <span>10. 成本組成結構</span>
+            </a>
+            <a class="nav-item" data-target="tab-cost-var">
+                <svg class="nav-icon" viewBox="0 0 24 24"><path d="M16 6l2.29 2.29-4.88 4.88-4-4L2 16.59 3.41 18l6-6 4 4 6.3-6.29L22 12V6z"/></svg>
+                <span>11. 成本差異追蹤</span>
+            </a>
+            <a class="nav-item" data-target="tab-cost-rca">
+                <svg class="nav-icon" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
+                <span>12. 根因分析鑽取</span>
+            </a>
+            <div class="nav-group-title">進階分析 (Advanced)</div>
+            <a class="nav-item" data-target="tab-forecast">
+                <svg class="nav-icon" viewBox="0 0 24 24"><path d="M23 8c0 1.1-.9 2-2 2-.18 0-.35-.02-.51-.07l-3.56 3.55c.05.16.07.34.07.52 0 1.1-.9 2-2 2s-2-.9-2-2c0-.18.02-.36.07-.52l-2.55-2.55c-.16.05-.34.07-.52.07s-.36-.02-.52-.07l-4.55 4.56c.05.16.07.33.07.51 0 1.1-.9 2-2 2s-2-.9-2-2 .9-2 2-2c.18 0 .35.02.51.07l4.56-4.55C8.02 9.36 8 9.18 8 9c0-1.1.9-2 2-2s2 .9 2 2c0 .18-.02.36-.07.52l2.55 2.55c.16-.05.34-.07.52-.07s.36.02.52.07l3.55-3.56C19.02 8.35 19 8.18 19 8c0-1.1.9-2 2-2s2 .9 2 2z"/></svg>
+                <span>13. 滾動預測</span>
+            </a>
+            <a class="nav-item" data-target="tab-dax-kb">
+                <svg class="nav-icon" viewBox="0 0 24 24"><path d="M18 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zM6 4h5v8l-2.5-1.5L6 12V4z"/></svg>
+                <span>14. DAX 知識庫</span>
+            </a>
+            <div class="nav-group-title">策略分析 (Strategic)</div>
+            <a class="nav-item" data-target="tab-iron-triangle">
+                <svg class="nav-icon" viewBox="0 0 24 24"><path d="M12 2L1 21h22L12 2zm0 4l7.53 13H4.47L12 6z"/></svg>
+                <span>15. 核心三角儀表</span>
+            </a>
+            <a class="nav-item" data-target="tab-cashflow">
+                <svg class="nav-icon" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1.41 16.09V20h-2.67v-1.93c-1.71-.36-3.16-1.46-3.27-3.4h1.96c.1 1.05.82 1.87 2.65 1.87 1.96 0 2.4-.98 2.4-1.59 0-.83-.44-1.61-2.67-2.14-2.48-.6-4.18-1.62-4.18-3.67 0-1.72 1.39-2.84 3.11-3.21V4h2.67v1.95c1.86.45 2.79 1.86 2.85 3.39H14.3c-.05-1.11-.64-1.87-2.22-1.87-1.5 0-2.4.68-2.4 1.64 0 .84.65 1.39 2.67 1.94s4.18 1.36 4.18 3.85c0 1.91-1.51 3.14-3.12 3.19z"/></svg>
+                <span>16. 資金佔用分析</span>
+            </a>
+            <a class="nav-item" data-target="tab-risk-matrix">
+                <svg class="nav-icon" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+                <span>17. 供應鏈風險矩陣</span>
+            </a>
+            <a class="nav-item" data-target="tab-procurement-quad">
+                <svg class="nav-icon" viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V5h14v14zM7 10h2v7H7zm4-3h2v10h-2zm4 6h2v4h-2z"/></svg>
+                <span>18. 採購效率象限</span>
+            </a>
+            <a class="nav-item" data-target="tab-whatif">
+                <svg class="nav-icon" viewBox="0 0 24 24"><path d="M19.43 12.98c.04-.32.07-.64.07-.98s-.03-.66-.07-.98l2.11-1.65c.19-.15.24-.42.12-.64l-2-3.46c-.12-.22-.39-.3-.61-.22l-2.49 1c-.52-.4-1.08-.73-1.69-.98l-.38-2.65C14.46 2.18 14.25 2 14 2h-4c-.25 0-.46.18-.49.42l-.38 2.65c-.61.25-1.17.59-1.69.98l-2.49-1c-.23-.09-.49 0-.61.22l-2 3.46c-.13.22-.07.49.12.64l2.11 1.65c-.04.32-.07.65-.07.98s.03.66.07.98l-2.11 1.65c-.19.15-.24.42-.12.64l2 3.46c.12.22.39.3.61.22l2.49-1c.52.4 1.08.73 1.69.98l.38 2.65c.03.24.24.42.49.42h4c.25 0 .46-.18.49-.42l.38-2.65c.61-.25 1.17-.59 1.69-.98l2.49 1c.23.09.49 0 .61-.22l2-3.46c.12-.22.07-.49-.12-.64l-2.11-1.65zM12 15.5c-1.93 0-3.5-1.57-3.5-3.5s1.57-3.5 3.5-3.5 3.5 1.57 3.5 3.5-1.57 3.5-3.5 3.5z"/></svg>
+                <span>19. 情境模擬器</span>
+            </a>
+            <a class="nav-item" data-target="tab-exec-cockpit">
+                <svg class="nav-icon" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm4.44-12.56l-5.03 5.03-2.12-2.12L8 11.64l3.41 3.41 6.32-6.32-1.29-1.29z"/></svg>
+                <span>20. 管理駕駛艙</span>
+            </a>
+            <a class="nav-item" data-target="tab-vsm">
+                <svg class="nav-icon" viewBox="0 0 24 24"><path d="M22 11V3h-7v3H9V3H2v8h7V8h2v10h4v3h7v-8h-7v3h-2V8h2v3z"/></svg>
+                <span>21. 價值流圖</span>
+            </a>
+            <a class="nav-item" data-target="tab-benchmark">
+                <svg class="nav-icon" viewBox="0 0 24 24"><path d="M16 6l2.29 2.29-4.88 4.88-4-4L2 16.59 3.41 18l6-6 4 4 6.3-6.29L22 12V6z"/></svg>
+                <span>22. 標竿對比</span>
+            </a>
+        </div>
+    </aside>
+    <!-- ===== Main Content ===== -->
+    <main class="main-content">
+        <header class="topbar">
+            <h2 class="page-title" id="topbar-title">
+                <svg class="page-title-icon" viewBox="0 0 24 24"><path d="M3 13h8V3H3v10zm0 8h8v-6H3v6zm10 0h8V11h-8v10zm0-18v6h8V3h-8z"/></svg>
+                首頁總覽
+            </h2>
+            <div class="controls">
+                <div class="date-filter">
+                    <label>從</label>
+                    <input type="date" id="date-start">
+                    <label>至</label>
+                    <input type="date" id="date-end">
+                </div>
+                <button class="btn" id="btn-reset" title="載入範例資料">
+                    <svg viewBox="0 0 24 24"><path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg>
+                    範例資料
+                </button>
+                <label for="file-upload" class="btn btn-primary" title="上傳 Excel/CSV">
+                    <svg viewBox="0 0 24 24"><path d="M9 16h6v-6h4l-7-7-7 7h4zm-4 2h14v2H5z"/></svg>
+                    上傳
+                </label>
+                <input type="file" id="file-upload" accept=".xlsx,.xls,.csv">
+                <div class="export-dropdown">
+                    <button class="btn" id="btn-export" title="匯出">
+                        <svg viewBox="0 0 24 24"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
+                        匯出
+                    </button>
+                    <div class="export-menu glass-panel" id="export-menu">
+                        <div class="export-menu-item" data-format="json">📄 匯出 JSON</div>
+                        <div class="export-menu-item" data-format="excel">📊 匯出 Excel</div>
+                        <div class="export-menu-item" data-format="pdf">📑 匯出 PDF</div>
+                        <div class="export-menu-item" data-format="png">🖼️ 匯出 PNG</div>
+                    </div>
+                </div>
+                <button class="btn btn-toggle-theme" id="btn-theme" title="切換明暗模式">🌙</button>
+            </div>
+        </header>
+
+        <div class="dashboard-container" id="dashboard-container">
+            <!-- Page 1: Overview -->
+            <div class="tab-pane active" id="tab-overview">
+                <div class="grid-kpi" id="overview-kpis"></div>
+                <div class="grid-charts asym">
+                    <div class="glass-panel chart-card"><div class="chart-header"><h3 class="chart-title">採購成本趨勢 (Standard vs Actual)</h3></div><div class="chart-container"><canvas id="chart-overview-cost"></canvas></div></div>
+                    <div class="glass-panel chart-card"><div class="chart-header"><h3 class="chart-title">庫存 A/B/C 佔比</h3></div><div class="chart-container"><canvas id="chart-overview-inv"></canvas></div></div>
+                </div>
+                <div class="grid-charts">
+                    <div class="glass-panel chart-card"><div class="chart-header"><h3 class="chart-title">前五大供應商績效</h3></div><div class="chart-container"><canvas id="chart-overview-sup"></canvas></div></div>
+                    <div class="glass-panel chart-card"><div class="chart-header"><h3 class="chart-title">異常摘要雷達</h3></div><div class="chart-container"><canvas id="chart-overview-anomaly"></canvas></div></div>
+                </div>
+            </div>
+            <!-- Page 2: Anomaly Radar -->
+            <div class="tab-pane" id="tab-anomaly">
+                <div class="traffic-lights" id="anomaly-lights"></div>
+                <div class="grid-charts asym">
+                    <div class="glass-panel chart-card"><div class="chart-header"><h3 class="chart-title">異常維度雷達圖</h3></div><div class="chart-container"><canvas id="chart-anomaly-radar"></canvas></div></div>
+                    <div class="glass-panel chart-card"><div class="chart-header"><h3 class="chart-title">異常趨勢</h3></div><div class="chart-container"><canvas id="chart-anomaly-trend"></canvas></div></div>
+                </div>
+                <div class="glass-panel chart-card" style="min-height:250px"><div class="chart-header"><h3 class="chart-title">Top 異常項目明細</h3></div><div class="table-container" id="table-anomaly-detail"></div></div>
+            </div>
+            <!-- Page 3: Inventory Efficiency -->
+            <div class="tab-pane" id="tab-inv-efficiency">
+                <div class="grid-kpi" id="inv-eff-kpis"></div>
+                <div class="grid-charts asym">
+                    <div class="glass-panel chart-card"><div class="chart-header"><h3 class="chart-title">庫存金額趨勢與週轉天數</h3></div><div class="chart-container"><canvas id="chart-inv-trend"></canvas></div></div>
+                    <div class="glass-panel chart-card"><div class="chart-header"><h3 class="chart-title">庫存 A/B/C 分類統計</h3></div><div class="chart-container"><canvas id="chart-inv-abc"></canvas></div></div>
+                </div>
+                <div class="glass-panel chart-card" style="min-height:250px"><div class="chart-header"><h3 class="chart-title">高單價庫存明細 (Top 10)</h3></div><div class="table-container" id="table-inv-detail"></div></div>
+            </div>
+            <!-- Page 4: Inventory Risk -->
+            <div class="tab-pane" id="tab-inv-risk">
+                <div class="grid-kpi" id="inv-risk-kpis"></div>
+                <div class="grid-charts split-3">
+                    <div class="glass-panel chart-card"><div class="chart-header"><h3 class="chart-title">庫齡分佈瀑布圖</h3></div><div class="chart-container"><canvas id="chart-risk-waterfall"></canvas></div></div>
+                    <div class="glass-panel chart-card"><div class="chart-header"><h3 class="chart-title">通用 vs 專用料佔比</h3></div><div class="chart-container"><canvas id="chart-risk-type"></canvas></div></div>
+                    <div class="glass-panel chart-card"><div class="chart-header"><h3 class="chart-title">庫存消耗率</h3></div><div class="chart-container"><canvas id="chart-risk-consume"></canvas></div></div>
+                </div>
+            </div>
+            <!-- Page 5: Supplier Pricing -->
+            <div class="tab-pane" id="tab-sup-price">
+                <div class="grid-kpi" id="sup-price-kpis"></div>
+                <div class="grid-charts asym">
+                    <div class="glass-panel chart-card"><div class="chart-header"><h3 class="chart-title">帕雷托分析 (80/20) — 採購金額</h3></div><div class="chart-container"><canvas id="chart-sup-pareto"></canvas></div></div>
+                    <div class="glass-panel chart-card"><div class="chart-header"><h3 class="chart-title">採購類別佔比</h3></div><div class="chart-container"><canvas id="chart-sup-category"></canvas></div></div>
+                </div>
+            </div>
+            <!-- Page 6: Supplier Timeliness -->
+            <div class="tab-pane" id="tab-sup-time">
+                <div class="grid-kpi" id="sup-time-kpis"></div>
+                <div class="grid-charts full">
+                    <div class="glass-panel chart-card"><div class="chart-header"><h3 class="chart-title">採購交貨散佈圖 (訂購量 vs 延遲天數)</h3></div><div class="chart-container"><canvas id="chart-sup-scatter"></canvas></div></div>
+                </div>
+                <div class="grid-charts">
+                    <div class="glass-panel chart-card"><div class="chart-header"><h3 class="chart-title">遲交天數 Top 供應商</h3></div><div class="chart-container"><canvas id="chart-sup-delay"></canvas></div></div>
+                    <div class="glass-panel chart-card"><div class="chart-header"><h3 class="chart-title">月度準交率趨勢</h3></div><div class="chart-container"><canvas id="chart-sup-ontime"></canvas></div></div>
+                </div>
+            </div>
+            <!-- Page 7: Supplier Scorecard -->
+            <div class="tab-pane" id="tab-sup-perf">
+                <div class="grid-kpi" id="sup-perf-kpis"></div>
+                <div class="grid-charts asym">
+                    <div class="glass-panel chart-card"><div class="chart-header"><h3 class="chart-title">供應商評分卡</h3></div><div class="table-container" id="table-sup-scorecard"></div></div>
+                    <div class="glass-panel chart-card"><div class="chart-header"><h3 class="chart-title">綜合評分雷達</h3></div><div class="chart-container"><canvas id="chart-sup-radar"></canvas></div></div>
+                </div>
+            </div>
+            <!-- Page 8: BOM Structure -->
+            <div class="tab-pane" id="tab-cost-bom">
+                <div class="grid-kpi" id="cost-bom-kpis"></div>
+                <div class="grid-charts">
+                    <div class="glass-panel chart-card"><div class="chart-header"><h3 class="chart-title">BOM 成本分解</h3></div><div class="chart-container"><canvas id="chart-bom-cost"></canvas></div></div>
+                    <div class="glass-panel chart-card" style="min-height:250px"><div class="chart-header"><h3 class="chart-title">BOM 展平矩陣</h3></div><div class="table-container" id="table-bom-matrix"></div></div>
+                </div>
+            </div>
+            <!-- Page 9: Production Yields -->
+            <div class="tab-pane" id="tab-cost-yield">
+                <div class="grid-kpi" id="cost-yield-kpis"></div>
+                <div class="grid-charts">
+                    <div class="glass-panel chart-card"><div class="chart-header"><h3 class="chart-title">產線良率趨勢</h3></div><div class="chart-container"><canvas id="chart-yield-line"></canvas></div></div>
+                    <div class="glass-panel chart-card"><div class="chart-header"><h3 class="chart-title">各產線平均良率</h3></div><div class="chart-container"><canvas id="chart-yield-avg"></canvas></div></div>
+                </div>
+                <div class="glass-panel chart-card" style="min-height:250px"><div class="chart-header"><h3 class="chart-title">良率熱力圖（產品 × 產線）</h3></div><div class="table-container" id="table-yield-heatmap"></div></div>
+            </div>
+            <!-- Page 10: Cost Structure -->
+            <div class="tab-pane" id="tab-cost-struct">
+                <div class="grid-kpi" id="cost-struct-kpis"></div>
+                <div class="grid-charts asym">
+                    <div class="glass-panel chart-card"><div class="chart-header"><h3 class="chart-title">料工費堆疊趨勢</h3></div><div class="chart-container"><canvas id="chart-cost-trend"></canvas></div></div>
+                    <div class="glass-panel chart-card"><div class="chart-header"><h3 class="chart-title">成本組成比例</h3></div><div class="chart-container"><canvas id="chart-cost-pie"></canvas></div></div>
+                </div>
+            </div>
+            <!-- Page 11: Cost Variances -->
+            <div class="tab-pane" id="tab-cost-var">
+                <div class="grid-kpi" id="cost-var-kpis"></div>
+                <div class="grid-charts">
+                    <div class="glass-panel chart-card"><div class="chart-header"><h3 class="chart-title">成本差異瀑布圖</h3></div><div class="chart-container"><canvas id="chart-cost-waterfall"></canvas></div></div>
+                    <div class="glass-panel chart-card" style="min-height:250px"><div class="chart-header"><h3 class="chart-title">異常工單追蹤表</h3></div><div class="table-container" id="table-cost-abnormal"></div></div>
+                </div>
+            </div>
+            <!-- Page 12: RCA Drill-Down -->
+            <div class="tab-pane" id="tab-cost-rca">
+                <div class="grid-kpi" id="cost-rca-kpis"></div>
+                <div style="margin-bottom:16px;display:flex;gap:8px;align-items:center;">
+                    <label style="font-size:0.85rem;color:var(--text-secondary)">分析維度：</label>
+                    <select id="rca-dimension" class="btn" style="padding:6px 12px;">
+                        <option value="supplier">按供應商</option>
+                        <option value="line">按產線</option>
+                        <option value="product">按產品</option>
+                    </select>
+                </div>
+                <div class="grid-charts">
+                    <div class="glass-panel chart-card"><div class="chart-header"><h3 class="chart-title">差異分解瀑布</h3></div><div class="chart-container"><canvas id="chart-rca-waterfall"></canvas></div></div>
+                    <div class="glass-panel chart-card"><div class="chart-header"><h3 class="chart-title">維度差異排名</h3></div><div class="chart-container"><canvas id="chart-rca-rank"></canvas></div></div>
+                </div>
+            </div>
+            <!-- Page 13: Rolling Forecast -->
+            <div class="tab-pane" id="tab-forecast">
+                <div class="forecast-info" id="forecast-info"></div>
+                <div class="grid-charts full">
+                    <div class="glass-panel chart-card" style="min-height:450px"><div class="chart-header"><h3 class="chart-title">滾動預測：生產成本趨勢</h3></div><div class="chart-container"><canvas id="chart-forecast"></canvas></div></div>
+                </div>
+            </div>
+            <!-- Page 14: DAX Knowledge Base -->
+            <div class="tab-pane" id="tab-dax-kb">
+                <input type="text" class="dax-search" id="dax-search" placeholder="搜尋 DAX 公式（如 CALCULATE、SUMX、庫存...）">
+                <div class="dax-tabs" id="dax-tabs"></div>
+                <div id="dax-content"></div>
+            </div>
+
+            <!-- Page 15: Iron Triangle -->
+            <div class="tab-pane" id="tab-iron-triangle">
+                <div class="iron-triangle-container">
+                    <svg class="iron-triangle-svg" id="iron-triangle-svg" viewBox="0 0 400 380"></svg>
+                </div>
+                <div class="triangle-kpis" id="iron-triangle-kpis"></div>
+                <div class="grid-charts">
+                    <div class="glass-panel chart-card"><div class="chart-header"><h3 class="chart-title">三維得分趨勢 <span class="chart-subtitle">Dimension Scores Trend</span></h3></div><div class="chart-container"><canvas id="chart-triangle-trend"></canvas></div></div>
+                    <div class="glass-panel chart-card"><div class="chart-header"><h3 class="chart-title">三維雷達對比 <span class="chart-subtitle">Radar Comparison</span></h3></div><div class="chart-container"><canvas id="chart-triangle-radar"></canvas></div></div>
+                </div>
+            </div>
+            <!-- Page 16: Cash Flow Impact -->
+            <div class="tab-pane" id="tab-cashflow">
+                <div class="cash-kpis" id="cashflow-kpis"></div>
+                <div class="grid-charts">
+                    <div class="glass-panel chart-card"><div class="chart-header"><h3 class="chart-title">庫存資金流動瀑布圖 <span class="chart-subtitle">Inventory Cash Flow Waterfall</span></h3></div><div class="chart-container"><canvas id="chart-cash-waterfall"></canvas></div></div>
+                    <div class="glass-panel chart-card"><div class="chart-header"><h3 class="chart-title">資金佔用率 <span class="chart-subtitle">Capital Tied-Up Rate</span></h3></div><div class="chart-container"><canvas id="chart-cash-gauge"></canvas></div></div>
+                </div>
+                <div class="grid-charts">
+                    <div class="glass-panel chart-card"><div class="chart-header"><h3 class="chart-title">交期狀況對資金影響 <span class="chart-subtitle">Delivery Status Cash Impact</span></h3></div><div class="chart-container"><canvas id="chart-cash-delivery"></canvas></div></div>
+                    <div class="glass-panel chart-card"><div class="chart-header"><h3 class="chart-title">通用料 vs 專用料 資金佔比 <span class="chart-subtitle">Generic vs Specialized</span></h3></div><div class="chart-container"><canvas id="chart-cash-type"></canvas></div></div>
+                </div>
+            </div>
+            <!-- Page 17: Supply Chain Risk Matrix -->
+            <div class="tab-pane" id="tab-risk-matrix">
+                <div class="grid-kpi" id="risk-matrix-kpis"></div>
+                <div class="grid-charts asym">
+                    <div class="glass-panel chart-card" style="min-height:450px"><div class="chart-header"><h3 class="chart-title">風險矩陣氣泡圖 <span class="chart-subtitle">Risk Matrix Bubble Chart</span></h3></div><div class="chart-container"><canvas id="chart-risk-bubble"></canvas></div></div>
+                    <div class="glass-panel chart-card"><div class="chart-header"><h3 class="chart-title">風險趨勢 <span class="chart-subtitle">Risk Trend Sparklines</span></h3></div><div class="chart-container"><canvas id="chart-risk-trends"></canvas></div></div>
+                </div>
+                <div class="glass-panel chart-card" style="min-height:250px"><div class="chart-header"><h3 class="chart-title">Top 10 高風險項目 <span class="chart-subtitle">High Risk Items</span></h3></div><div class="table-container" id="table-risk-top10"></div></div>
+            </div>
+            <!-- Page 18: Procurement Quadrant -->
+            <div class="tab-pane" id="tab-procurement-quad">
+                <div class="grid-kpi" id="procurement-quad-kpis"></div>
+                <div class="quadrant-layout">
+                    <div class="glass-panel chart-card" style="min-height:450px"><div class="chart-header"><h3 class="chart-title">採購效率散佈圖 <span class="chart-subtitle">Procurement Efficiency Scatter</span></h3></div><div class="chart-container"><canvas id="chart-proc-scatter"></canvas></div></div>
+                    <div class="quadrant-side" id="quadrant-stats"></div>
+                </div>
+                <div class="glass-panel chart-card" style="min-height:250px"><div class="chart-header"><h3 class="chart-title">效率異常項目 (Zone B) <span class="chart-subtitle">Inefficiency Zone Items</span></h3></div><div class="table-container" id="table-proc-anomaly"></div></div>
+            </div>
+            <!-- Page 19: What-If Simulator -->
+            <div class="tab-pane" id="tab-whatif">
+                <div class="simulator-controls">
+                    <div class="glass-panel sim-slider-group">
+                        <label>原料價格變動 Material Price Change</label>
+                        <div class="sim-value" id="sim-price-val">0%</div>
+                        <input type="range" id="sim-price" min="-30" max="30" value="0" step="1">
+                    </div>
+                    <div class="glass-panel sim-slider-group">
+                        <label>良率變動 Yield Change</label>
+                        <div class="sim-value" id="sim-yield-val">0%</div>
+                        <input type="range" id="sim-yield" min="-10" max="10" value="0" step="0.5">
+                    </div>
+                    <div class="glass-panel sim-slider-group">
+                        <label>產量變動 Volume Change</label>
+                        <div class="sim-value" id="sim-volume-val">0%</div>
+                        <input type="range" id="sim-volume" min="-30" max="30" value="0" step="1">
+                    </div>
+                </div>
+                <div class="glass-panel sim-summary" id="sim-summary"></div>
+                <div class="grid-charts">
+                    <div class="glass-panel chart-card"><div class="chart-header"><h3 class="chart-title">單位成本變化 <span class="chart-subtitle">Unit Cost Impact</span></h3></div><div class="chart-container"><canvas id="chart-sim-cost"></canvas></div></div>
+                    <div class="glass-panel chart-card"><div class="chart-header"><h3 class="chart-title">成本結構變化 <span class="chart-subtitle">Cost Structure Shift</span></h3></div><div class="chart-container"><canvas id="chart-sim-structure"></canvas></div></div>
+                </div>
+                <div class="grid-charts full">
+                    <div class="glass-panel chart-card"><div class="chart-header"><h3 class="chart-title">利潤影響瀑布 <span class="chart-subtitle">Profit Impact Waterfall</span></h3></div><div class="chart-container"><canvas id="chart-sim-waterfall"></canvas></div></div>
+                </div>
+            </div>
+            <!-- Page 20: Executive Cockpit -->
+            <div class="tab-pane" id="tab-exec-cockpit">
+                <div class="glass-panel traffic-summary-bar" id="cockpit-traffic"></div>
+                <div class="gauge-grid" id="cockpit-gauges"></div>
+                <div class="insight-cards" id="cockpit-insights"></div>
+            </div>
+            <!-- Page 21: Value Stream Map -->
+            <div class="tab-pane" id="tab-vsm">
+                <div class="grid-kpi" id="vsm-kpis"></div>
+                <div class="glass-panel chart-card" style="min-height:auto;padding:24px;">
+                    <div class="chart-header"><h3 class="chart-title">價值流程圖 <span class="chart-subtitle">Value Stream Flow</span></h3></div>
+                    <div class="vsm-container"><div class="vsm-flow" id="vsm-flow"></div></div>
+                </div>
+                <div class="glass-panel vsm-timeline" id="vsm-timeline"></div>
+                <div class="grid-charts" style="margin-top:24px;">
+                    <div class="glass-panel chart-card"><div class="chart-header"><h3 class="chart-title">各站點週期時間 <span class="chart-subtitle">Station Cycle Times</span></h3></div><div class="chart-container"><canvas id="chart-vsm-cycle"></canvas></div></div>
+                    <div class="glass-panel chart-card"><div class="chart-header"><h3 class="chart-title">增值 vs 浪費比例 <span class="chart-subtitle">Value-Add vs Waste</span></h3></div><div class="chart-container"><canvas id="chart-vsm-ratio"></canvas></div></div>
+                </div>
+            </div>
+            <!-- Page 22: Benchmark Comparison -->
+            <div class="tab-pane" id="tab-benchmark">
+                <div class="grid-kpi" id="benchmark-kpis"></div>
+                <div class="grid-charts">
+                    <div class="glass-panel chart-card" style="min-height:420px"><div class="chart-header"><h3 class="chart-title">標竿雷達對比 <span class="chart-subtitle">Benchmark Radar</span></h3></div><div class="chart-container"><canvas id="chart-bench-radar"></canvas></div></div>
+                    <div class="glass-panel chart-card"><div class="chart-header"><h3 class="chart-title">與標竿差距 <span class="chart-subtitle">Gap to Benchmark</span></h3></div><div class="chart-container"><canvas id="chart-bench-gap"></canvas></div></div>
+                </div>
+                <div class="glass-panel chart-card" style="min-height:250px"><div class="chart-header"><h3 class="chart-title">改善路線圖 <span class="chart-subtitle">Improvement Roadmap</span></h3></div><div class="table-container" id="table-bench-roadmap"></div></div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Drill-Down Modal -->
+    <div class="drill-modal-backdrop" id="drill-backdrop">
+        <div class="drill-modal glass-panel">
+            <div class="drill-modal-header">
+                <h3 id="drill-title">明細</h3>
+                <button class="drill-modal-close" id="drill-close">&times;</button>
+            </div>
+            <div class="drill-modal-body" id="drill-body"></div>
+        </div>
+    </div>
+
+    <!-- Validation Modal -->
+    <div class="drill-modal-backdrop" id="validation-backdrop">
+        <div class="drill-modal glass-panel">
+            <div class="drill-modal-header">
+                <h3>資料上傳驗證報告</h3>
+                <button class="drill-modal-close" id="validation-close">&times;</button>
+            </div>
+            <div class="drill-modal-body" id="validation-body"></div>
+        </div>
+    </div>
+<script>
+    'use strict';
+
+    // ===== 全域狀態 =====
+    let currentData = null;
+    window.mfgCharts = {};
+    let pageDirty = {};  // 懶載入標記
+
+    // ===== 工具函式 =====
+    const fmt = {
+        currency: v => { if(v>=1e6) return `$${(v/1e6).toFixed(1)}M`; if(v>=1e3) return `$${(v/1e3).toFixed(1)}k`; return `$${Math.round(v).toLocaleString()}`; },
+        pct: v => `${(v*100).toFixed(1)}%`,
+        num: v => v.toLocaleString(),
+        date: d => typeof d==='string'? d : d.toISOString().split('T')[0],
+    };
+    const trendIcon = (val, goodUp=false) => {
+        const up = val > 0;
+        const cls = (up === goodUp) ? (up ? 'trend-up good' : 'trend-down good') : (up ? 'trend-up' : 'trend-down bad');
+        const arrow = up ? 'M4 12l1.41 1.41L11 7.83V20h2V7.83l5.58 5.59L20 12l-8-8-8 8z' : 'M20 12l-1.41-1.41L13 16.17V4h-2v12.17l-5.58-5.59L4 12l8 8 8-8z';
+        return `<span class="${cls}"><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="${arrow}"/></svg> ${val>0?'+':''}${(val*100).toFixed(1)}%</span>`;
+    };
+    const destroyChart = id => { if(window.mfgCharts[id]){ window.mfgCharts[id].destroy(); delete window.mfgCharts[id]; } };
+    const getDateFilter = () => {
+        const s = document.getElementById('date-start').value;
+        const e = document.getElementById('date-end').value;
+        return { start: s || null, end: e || null };
+    };
+    const filterByDate = (arr, dateField='date') => {
+        const {start, end} = getDateFilter();
+        return arr.filter(item => {
+            if(start && item[dateField] < start) return false;
+            if(end && item[dateField] > end) return false;
+            return true;
+        });
+    };
+
+    // ===== Chart.js 預設 =====
+    const applyChartDefaults = () => {
+        const isDark = !document.body.classList.contains('light-mode');
+        Chart.defaults.color = isDark ? '#94a3b8' : '#7a6e5e';
+        Chart.defaults.font.family = "'Inter', sans-serif";
+        Chart.defaults.plugins.tooltip.backgroundColor = isDark ? 'rgba(15,23,42,0.9)' : 'rgba(255,251,245,0.96)';
+        Chart.defaults.plugins.tooltip.titleColor = isDark ? '#f8fafc' : '#2c2418';
+        Chart.defaults.plugins.tooltip.bodyColor = isDark ? '#f8fafc' : '#2c2418';
+        Chart.defaults.plugins.tooltip.borderColor = isDark ? 'rgba(255,255,255,0.1)' : 'rgba(180,160,130,0.2)';
+        Chart.defaults.plugins.tooltip.borderWidth = 1;
+        Chart.defaults.plugins.tooltip.padding = 12;
+        Chart.defaults.plugins.tooltip.cornerRadius = 8;
+    };
+    applyChartDefaults();
+
+    // ===== 圖表初始化輔助 =====
+    const initLineChart = (canvasId, labels, title, data1, data2, label1='標準', label2='實際') => {
+        destroyChart(canvasId);
+        const ctx = document.getElementById(canvasId);
+        if(!ctx) return;
+        window.mfgCharts[canvasId] = new Chart(ctx, {
+            type: 'line',
+            data: { labels, datasets: [
+                { label: label1, data: data1, borderColor: '#3b82f6', backgroundColor: 'rgba(59,130,246,0.1)', fill: true, tension: 0.4 },
+                { label: label2, data: data2, borderColor: '#f59e0b', backgroundColor: 'rgba(245,158,11,0.1)', fill: true, tension: 0.4 }
+            ]},
+            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'top' }, datalabels: { display: false } }, scales: { y: { grid: { color: 'var(--chart-grid)' } }, x: { grid: { display: false } } } }
+        });
+    };
+    const initBarChart = (canvasId, labels, label, data, horizontal=false, colors=null) => {
+        destroyChart(canvasId);
+        const ctx = document.getElementById(canvasId);
+        if(!ctx) return;
+        const defaultColors = ['#3b82f6','#10b981','#f59e0b','#ef4444','#8b5cf6','#0ea5e9','#ec4899','#14b8a6'];
+        window.mfgCharts[canvasId] = new Chart(ctx, {
+            type: 'bar',
+            data: { labels, datasets: [{ label, data, backgroundColor: colors || defaultColors.slice(0, data.length), borderRadius: 6 }] },
+            options: { indexAxis: horizontal?'y':'x', responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, datalabels: { display: false } }, scales: { y: { grid: { color: 'var(--chart-grid)' } }, x: { grid: { display: false } } } }
+        });
+    };
+    const initDoughnutChart = (canvasId, labels, data) => {
+        destroyChart(canvasId);
+        const ctx = document.getElementById(canvasId);
+        if(!ctx) return;
+        window.mfgCharts[canvasId] = new Chart(ctx, {
+            type: 'doughnut',
+            data: { labels, datasets: [{ data, backgroundColor: ['#3b82f6','#10b981','#f59e0b','#ef4444','#8b5cf6','#0ea5e9','#ec4899','#14b8a6'], borderWidth: 0 }] },
+            options: { responsive: true, maintainAspectRatio: false, cutout: '65%', plugins: { legend: { position: 'bottom' }, datalabels: { display: false } } }
+        });
+    };
+    const initRadarChart = (canvasId, labels, label, data) => {
+        destroyChart(canvasId);
+        const ctx = document.getElementById(canvasId);
+        if(!ctx) return;
+        window.mfgCharts[canvasId] = new Chart(ctx, {
+            type: 'radar',
+            data: { labels, datasets: [{ label, data, borderColor: '#3b82f6', backgroundColor: 'rgba(59,130,246,0.2)', pointBackgroundColor: '#3b82f6' }] },
+            options: { responsive: true, maintainAspectRatio: false, scales: { r: { beginAtZero: true, grid: { color: 'rgba(255,255,255,0.08)' }, angleLines: { color: 'rgba(255,255,255,0.08)' } } }, plugins: { legend: { display: false }, datalabels: { display: false } } }
+        });
+    };
+    const initScatterChart = (canvasId, datasets) => {
+        destroyChart(canvasId);
+        const ctx = document.getElementById(canvasId);
+        if(!ctx) return;
+        window.mfgCharts[canvasId] = new Chart(ctx, {
+            type: 'scatter',
+            data: { datasets },
+            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'top' }, datalabels: { display: false } }, scales: { x: { title: { display: true, text: '訂購量' } }, y: { title: { display: true, text: '延遲天數' } } } }
+        });
+    };
+    const initStackedAreaChart = (canvasId, labels, datasets) => {
+        destroyChart(canvasId);
+        const ctx = document.getElementById(canvasId);
+        if(!ctx) return;
+        window.mfgCharts[canvasId] = new Chart(ctx, {
+            type: 'line',
+            data: { labels, datasets: datasets.map((ds,i) => ({ ...ds, fill: i===0?'origin':'-1', tension: 0.4 })) },
+            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'top' }, datalabels: { display: false } }, scales: { y: { stacked: true, grid: { color: 'var(--chart-grid)' } }, x: { grid: { display: false } } } }
+        });
+    };
+    // 瀑布圖（浮動長條）
+    const initWaterfallChart = (canvasId, labels, values) => {
+        destroyChart(canvasId);
+        const ctx = document.getElementById(canvasId);
+        if(!ctx) return;
+        let running = 0;
+        const data = values.map((v,i) => {
+            if(i === values.length - 1) return [0, v]; // 總計
+            const start = running;
+            running += v;
+            return v >= 0 ? [start, running] : [running, start];
+        });
+        const colors = values.map((v,i) => i === values.length-1 ? '#3b82f6' : (v >= 0 ? '#ef4444' : '#10b981'));
+        window.mfgCharts[canvasId] = new Chart(ctx, {
+            type: 'bar',
+            data: { labels, datasets: [{ data, backgroundColor: colors, borderRadius: 4 }] },
+            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, datalabels: { display: false }, tooltip: { callbacks: { label: ctx => `${ctx.label}: ${fmt.currency(values[ctx.dataIndex])}` } } }, scales: { y: { grid: { color: 'var(--chart-grid)' } }, x: { grid: { display: false } } } }
+        });
+    };
+    // ===== V2 範例資料生成器 =====
+    const generateSampleDataV2 = () => {
+        const suppliers = [
+            { id:'S001', name:'台積精密工業', category:'電子零件', rating:92, discountRate:0.05, onTimeDeliveryRate:0.95, qualityScore:94, serviceScore:88, techScore:96 },
+            { id:'S002', name:'大立光電科技', category:'光學元件', rating:88, discountRate:0.02, onTimeDeliveryRate:0.88, qualityScore:90, serviceScore:82, techScore:92 },
+            { id:'S003', name:'日月光半導體', category:'封裝測試', rating:95, discountRate:0.04, onTimeDeliveryRate:0.98, qualityScore:96, serviceScore:92, techScore:94 },
+            { id:'S004', name:'鴻海金屬機殼', category:'機構件', rating:82, discountRate:0.08, onTimeDeliveryRate:0.85, qualityScore:78, serviceScore:75, techScore:80 },
+            { id:'S005', name:'聯發晶片組件', category:'IC 晶片', rating:90, discountRate:0.03, onTimeDeliveryRate:0.92, qualityScore:91, serviceScore:86, techScore:95 },
+            { id:'S006', name:'廣達組裝服務', category:'代工組裝', rating:86, discountRate:0.01, onTimeDeliveryRate:0.89, qualityScore:84, serviceScore:90, techScore:82 },
+            { id:'S007', name:'台達電模組', category:'電源供應', rating:94, discountRate:0.06, onTimeDeliveryRate:0.96, qualityScore:93, serviceScore:91, techScore:90 },
+            { id:'S008', name:'國巨被動元件', category:'基礎零件', rating:85, discountRate:0.07, onTimeDeliveryRate:0.87, qualityScore:82, serviceScore:80, techScore:78 },
+            { id:'S009', name:'瑞昱半導體', category:'IC 晶片', rating:89, discountRate:0.04, onTimeDeliveryRate:0.91, qualityScore:88, serviceScore:85, techScore:93 },
+            { id:'S010', name:'華碩精密', category:'電子零件', rating:83, discountRate:0.05, onTimeDeliveryRate:0.82, qualityScore:80, serviceScore:78, techScore:84 },
+            { id:'S011', name:'友達光電', category:'光學元件', rating:87, discountRate:0.03, onTimeDeliveryRate:0.90, qualityScore:86, serviceScore:84, techScore:88 },
+            { id:'S012', name:'矽品精密', category:'封裝測試', rating:91, discountRate:0.04, onTimeDeliveryRate:0.94, qualityScore:92, serviceScore:88, techScore:90 },
+        ];
+        // 計算 Tier
+        suppliers.forEach(s => {
+            s.compositeScore = Math.round(s.rating * 0.3 + s.onTimeDeliveryRate * 100 * 0.3 + s.qualityScore * 0.2 + s.serviceScore * 0.2);
+            s.tier = s.compositeScore >= 90 ? 'Preferred' : s.compositeScore >= 80 ? 'Approved' : 'At-Risk';
+        });
+
+        const materials = [
+            { id:'M-IC-01', name:'高階處理器晶片', category:'IC 晶片', supplierId:'S005', type:'專用料', abcClass:'A', unitCost:1500, stockQty:500, monthlyUsage:250, daysInStock:60, safetyStock:100, reorderPoint:200, leadTimeDays:21 },
+            { id:'M-OP-01', name:'高解析鏡頭模組', category:'光學元件', supplierId:'S002', type:'專用料', abcClass:'A', unitCost:800, stockQty:1000, monthlyUsage:400, daysInStock:75, safetyStock:200, reorderPoint:350, leadTimeDays:18 },
+            { id:'M-PW-01', name:'大容量電源供應器', category:'電源供應', supplierId:'S007', type:'通用料', abcClass:'A', unitCost:1200, stockQty:800, monthlyUsage:600, daysInStock:40, safetyStock:150, reorderPoint:400, leadTimeDays:14 },
+            { id:'M-PC-01', name:'多層印刷電路板', category:'電子零件', supplierId:'S001', type:'專用料', abcClass:'B', unitCost:300, stockQty:2500, monthlyUsage:1200, daysInStock:62, safetyStock:500, reorderPoint:800, leadTimeDays:10 },
+            { id:'M-ME-01', name:'鋁合金機殼', category:'機構件', supplierId:'S004', type:'專用料', abcClass:'B', unitCost:450, stockQty:1500, monthlyUsage:800, daysInStock:56, safetyStock:300, reorderPoint:600, leadTimeDays:12 },
+            { id:'M-PK-01', name:'防靜電包材', category:'包裝組件', supplierId:'S006', type:'通用料', abcClass:'B', unitCost:50, stockQty:10000, monthlyUsage:4500, daysInStock:66, safetyStock:2000, reorderPoint:3500, leadTimeDays:7 },
+            { id:'M-RE-01', name:'SMD 電阻', category:'基礎零件', supplierId:'S008', type:'通用料', abcClass:'C', unitCost:1.5, stockQty:500000, monthlyUsage:150000, daysInStock:100, safetyStock:50000, reorderPoint:120000, leadTimeDays:5 },
+            { id:'M-CA-01', name:'MLCC 電容', category:'基礎零件', supplierId:'S008', type:'通用料', abcClass:'C', unitCost:2.5, stockQty:300000, monthlyUsage:80000, daysInStock:112, safetyStock:30000, reorderPoint:70000, leadTimeDays:5 },
+            { id:'M-SC-01', name:'標準螺絲組', category:'機構件', supplierId:'S004', type:'通用料', abcClass:'C', unitCost:0.8, stockQty:200000, monthlyUsage:60000, daysInStock:100, safetyStock:20000, reorderPoint:50000, leadTimeDays:3 },
+            { id:'M-TP-01', name:'絕緣膠帶', category:'非生產用料', supplierId:'S004', type:'輔料', abcClass:'C', unitCost:15, stockQty:5000, monthlyUsage:1200, daysInStock:125, safetyStock:500, reorderPoint:1000, leadTimeDays:5 },
+            { id:'M-CN-01', name:'連接器模組', category:'電子零件', supplierId:'S010', type:'專用料', abcClass:'B', unitCost:180, stockQty:3000, monthlyUsage:1500, daysInStock:60, safetyStock:600, reorderPoint:1200, leadTimeDays:10 },
+            { id:'M-DP-01', name:'顯示面板', category:'光學元件', supplierId:'S011', type:'專用料', abcClass:'A', unitCost:950, stockQty:600, monthlyUsage:300, daysInStock:60, safetyStock:100, reorderPoint:250, leadTimeDays:20 },
+            { id:'M-IC-02', name:'通訊晶片', category:'IC 晶片', supplierId:'S009', type:'專用料', abcClass:'A', unitCost:680, stockQty:800, monthlyUsage:350, daysInStock:68, safetyStock:150, reorderPoint:300, leadTimeDays:18 },
+            { id:'M-HS-01', name:'散熱模組', category:'機構件', supplierId:'S004', type:'通用料', abcClass:'B', unitCost:120, stockQty:4000, monthlyUsage:2000, daysInStock:60, safetyStock:800, reorderPoint:1500, leadTimeDays:8 },
+            { id:'M-TS-01', name:'測試治具', category:'非生產用料', supplierId:'S012', type:'輔料', abcClass:'C', unitCost:350, stockQty:50, monthlyUsage:5, daysInStock:300, safetyStock:10, reorderPoint:15, leadTimeDays:30 },
+        ];
+
+        const products = [
+            { id:'FG-001', name:'旗艦智慧型手機', bom:[{matId:'M-IC-01',qty:1},{matId:'M-OP-01',qty:3},{matId:'M-ME-01',qty:1},{matId:'M-PC-01',qty:1},{matId:'M-RE-01',qty:45},{matId:'M-CA-01',qty:60},{matId:'M-DP-01',qty:1},{matId:'M-IC-02',qty:1}], stdLaborHrs:2.5, stdMachHrs:1.2 },
+            { id:'FG-002', name:'高階伺服器系統', bom:[{matId:'M-IC-01',qty:4},{matId:'M-PW-01',qty:2},{matId:'M-ME-01',qty:2},{matId:'M-PC-01',qty:4},{matId:'M-RE-01',qty:200},{matId:'M-CA-01',qty:250},{matId:'M-SC-01',qty:40},{matId:'M-HS-01',qty:4}], stdLaborHrs:8.0, stdMachHrs:4.5 },
+            { id:'FG-003', name:'工業物聯網閘道器', bom:[{matId:'M-IC-02',qty:2},{matId:'M-PC-01',qty:1},{matId:'M-CN-01',qty:3},{matId:'M-RE-01',qty:80},{matId:'M-CA-01',qty:100},{matId:'M-PW-01',qty:1},{matId:'M-HS-01',qty:1}], stdLaborHrs:3.0, stdMachHrs:1.8 },
+        ];
+
+        const stdLaborRate = 250, stdOverheadRate = 400;
+        const today = new Date('2024-12-31');
+        const lines = ['Line-A (SMT)', 'Line-B (組裝)', 'Line-C (測試)', 'Line-D (包裝)'];
+
+        // 採購訂單（300 筆，12 個月）
+        const purchaseOrders = [];
+        for(let i=0; i<300; i++){
+            const mat = materials[Math.floor(Math.random()*materials.length)];
+            if(mat.type==='輔料' && Math.random()>0.3) continue; // 輔料訂單較少
+            const sup = suppliers.find(s=>s.id===mat.supplierId) || suppliers[0];
+            const daysAgo = Math.floor(Math.random()*365);
+            const orderDate = new Date(today.getTime() - daysAgo*864e5);
+            const stdLead = mat.leadTimeDays || 14;
+            let actLead;
+            if(Math.random() < sup.onTimeDeliveryRate) { actLead = stdLead - Math.floor(Math.random()*4); }
+            else { actLead = stdLead + Math.ceil(Math.random()*11); }
+            const recvDate = new Date(orderDate.getTime() + actLead*864e5);
+            const plannedDate = new Date(orderDate.getTime() + stdLead*864e5);
+            const timeProgress = 1 - daysAgo/365;
+            const priceVar = 1 + (Math.random()*0.1-0.05);
+            const trendFactor = 1 - sup.discountRate*timeProgress;
+            const price = +(mat.unitCost * priceVar * trendFactor).toFixed(2);
+            const qty = Math.ceil((mat.monthlyUsage/2)*(1+Math.random()));
+            purchaseOrders.push({
+                poNumber:`PO-2024-${String(i+1).padStart(4,'0')}`, date:fmt.date(orderDate), receivedDate:fmt.date(recvDate),
+                plannedDeliveryDate:fmt.date(plannedDate), materialId:mat.id, materialName:mat.name,
+                supplierId:sup.id, supplierName:sup.name, qty, unitPrice:price, totalAmount:+(price*qty).toFixed(2),
+                standardLeadTime:stdLead, actualLeadTime:actLead, delayDays:actLead>stdLead?actLead-stdLead:0
+            });
+        }
+        purchaseOrders.sort((a,b)=>a.date.localeCompare(b.date));
+
+        // 生產工單（150 筆，12 個月）
+        const productionOrders = [];
+        for(let i=0; i<150; i++){
+            const prod = products[Math.floor(Math.random()*products.length)];
+            const line = lines[Math.floor(Math.random()*lines.length)];
+            const daysAgo = Math.floor(Math.random()*365);
+            const prodDate = new Date(today.getTime() - daysAgo*864e5);
+            const month = prodDate.toISOString().slice(0,7);
+            const targetOutput = Math.floor(500+Math.random()*1500);
+            const inputQty = targetOutput + Math.floor(Math.random()*50);
+            const defectRate = Math.random()*0.05;
+            const goodOutput = Math.floor(inputQty*(1-defectRate));
+            const defectQty = inputQty - goodOutput;
+            const scrapQty = Math.floor(defectQty*0.6);
+            const reworkQty = defectQty - scrapQty;
+            const actsFactor = 1 + (Math.random()*0.1-0.03);
+            let stdMatCost=0, actMatCost=0;
+            prod.bom.forEach(b=>{ const m=materials.find(x=>x.id===b.matId); if(m){ stdMatCost+=m.unitCost*b.qty; actMatCost+=m.unitCost*actsFactor*b.qty; }});
+            const stdLabor = prod.stdLaborHrs*stdLaborRate;
+            const stdOH = prod.stdMachHrs*stdOverheadRate;
+            const actLabor = prod.stdLaborHrs*actsFactor*(1+Math.random()*0.05)*stdLaborRate*1.05;
+            const actOH = prod.stdMachHrs*actsFactor*stdOverheadRate*1.02;
+            productionOrders.push({
+                orderId:`PRD-2024-${String(i+1).padStart(4,'0')}`, date:fmt.date(prodDate), month,
+                productId:prod.id, productName:prod.name, line, inputQty, goodOutput,
+                yieldRate:+(goodOutput/inputQty).toFixed(4), defectQty, scrapQty, reworkQty,
+                stdMaterialCost:+stdMatCost.toFixed(2), stdLaborCost:+stdLabor.toFixed(2), stdOverheadCost:+stdOH.toFixed(2),
+                stdTotalCost:+(stdMatCost+stdLabor+stdOH).toFixed(2),
+                actMaterialCost:+actMatCost.toFixed(2), actLaborCost:+actLabor.toFixed(2), actOverheadCost:+actOH.toFixed(2),
+                actTotalCost:+(actMatCost+actLabor+actOH).toFixed(2),
+                materialVar:+(actMatCost-stdMatCost).toFixed(2), laborVar:+(actLabor-stdLabor).toFixed(2), overheadVar:+(actOH-stdOH).toFixed(2)
+            });
+        }
+        productionOrders.sort((a,b)=>a.date.localeCompare(b.date));
+
+        // 庫存快照（12 個月）
+        const inventorySnapshots = [];
+        for(let m=0; m<12; m++){
+            const snapDate = new Date(2024, m, 28);
+            materials.forEach(mat=>{
+                const seasonal = 1 + 0.1*Math.sin(m*Math.PI/6);
+                const qty = Math.floor(mat.stockQty * seasonal * (0.9+Math.random()*0.2));
+                inventorySnapshots.push({ date:fmt.date(snapDate), materialId:mat.id, qty, value:+(qty*mat.unitCost).toFixed(2), type: mat.type==='輔料'||mat.type==='非生產用料'?'auxiliary':'raw' });
+            });
+        }
+
+        // 成本類型層級
+        const costTypes = [
+            { code:'DM-01', level1:'直接材料', level2:'IC 晶片', level3:'處理器' },
+            { code:'DM-02', level1:'直接材料', level2:'光學元件', level3:'鏡頭模組' },
+            { code:'DM-03', level1:'直接材料', level2:'電子零件', level3:'PCB' },
+            { code:'DM-04', level1:'直接材料', level2:'機構件', level3:'機殼' },
+            { code:'DM-05', level1:'直接材料', level2:'基礎零件', level3:'被動元件' },
+            { code:'DL-01', level1:'直接人工', level2:'生產人工', level3:'SMT 操作員' },
+            { code:'DL-02', level1:'直接人工', level2:'生產人工', level3:'組裝技術員' },
+            { code:'DL-03', level1:'直接人工', level2:'品管人工', level3:'測試員' },
+            { code:'MOH-01', level1:'製造費用', level2:'設備折舊', level3:'SMT 設備' },
+            { code:'MOH-02', level1:'製造費用', level2:'設備折舊', level3:'測試設備' },
+            { code:'MOH-03', level1:'製造費用', level2:'間接費用', level3:'水電瓦斯' },
+            { code:'MOH-04', level1:'製造費用', level2:'間接費用', level3:'廠房租金' },
+        ];
+
+        return { materials, suppliers, products, purchaseOrders, productionOrders, inventorySnapshots, costTypes };
+    };
+    // ===== 導航邏輯 =====
+    const navItems = document.querySelectorAll('.nav-item');
+    const tabPanes = document.querySelectorAll('.tab-pane');
+    const topbarTitle = document.getElementById('topbar-title');
+    const renderMap = {};  // 頁面 ID → render 函式
+
+    const switchTab = (targetId) => {
+        navItems.forEach(n=>n.classList.remove('active'));
+        tabPanes.forEach(p=>p.classList.remove('active'));
+        const navEl = document.querySelector(`.nav-item[data-target="${targetId}"]`);
+        if(navEl) navEl.classList.add('active');
+        const pane = document.getElementById(targetId);
+        if(pane) pane.classList.add('active');
+        if(navEl) topbarTitle.innerHTML = navEl.innerHTML;
+        // 懶載入：只渲染當前頁
+        if(renderMap[targetId] && currentData) renderMap[targetId]();
+        setTimeout(()=>window.dispatchEvent(new Event('resize')), 100);
+    };
+    navItems.forEach(item => {
+        item.addEventListener('click', e => { e.preventDefault(); switchTab(item.getAttribute('data-target')); });
+    });
+
+    // ===== 明暗模式 =====
+    const themeBtn = document.getElementById('btn-theme');
+    const applyTheme = (dark) => {
+        document.body.classList.toggle('light-mode', !dark);
+        themeBtn.textContent = dark ? '🌙' : '☀️';
+        // theme preference stored in memory only (sandboxed iframe compatible)
+        window._mfgTheme = dark ? 'dark' : 'light';
+        applyChartDefaults();
+        // 重新渲染當前頁面的圖表
+        const activePane = document.querySelector('.tab-pane.active');
+        if(activePane && renderMap[activePane.id] && currentData) renderMap[activePane.id]();
+    };
+    themeBtn.addEventListener('click', () => applyTheme(document.body.classList.contains('light-mode')));
+    if(window._mfgTheme === 'light') applyTheme(false);
+
+    // ===== 日期篩選 =====
+    document.getElementById('date-start').addEventListener('change', () => { const ap = document.querySelector('.tab-pane.active'); if(ap && renderMap[ap.id] && currentData) renderMap[ap.id](); });
+    document.getElementById('date-end').addEventListener('change', () => { const ap = document.querySelector('.tab-pane.active'); if(ap && renderMap[ap.id] && currentData) renderMap[ap.id](); });
+
+    // ===== 匯出功能 =====
+    const exportBtn = document.getElementById('btn-export');
+    const exportMenu = document.getElementById('export-menu');
+    exportBtn.addEventListener('click', () => exportMenu.classList.toggle('show'));
+    document.addEventListener('click', e => { if(!exportBtn.contains(e.target) && !exportMenu.contains(e.target)) exportMenu.classList.remove('show'); });
+
+    document.querySelectorAll('.export-menu-item').forEach(item => {
+        item.addEventListener('click', () => {
+            exportMenu.classList.remove('show');
+            const format = item.dataset.format;
+
+            // --- JSON 匯出 ---
+            if(format==='json') {
+                const blob = new Blob([JSON.stringify(currentData, null, 2)], {type:'application/json'});
+                const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'manufacturing_data_v3.json'; a.click();
+                URL.revokeObjectURL(a.href);
+                return;
+            }
+
+            // --- Excel 匯出（全部 7 集合）---
+            if(format==='excel') {
+                try {
+                    if(typeof XLSX === 'undefined') { alert('SheetJS 尚未載入，請檢查網路連線後重新整理頁面'); return; }
+                    const wb = XLSX.utils.book_new();
+                    const collections = [
+                        ['Materials','materials'], ['Suppliers','suppliers'], ['Products','products'],
+                        ['PurchaseOrders','purchaseOrders'], ['ProductionOrders','productionOrders'],
+                        ['InventorySnapshots','inventorySnapshots'], ['CostTypes','costTypes']
+                    ];
+                    collections.forEach(([sheetName, key]) => {
+                        const arr = currentData[key];
+                        if(arr && arr.length > 0) {
+                            const ws = XLSX.utils.json_to_sheet(arr);
+                            XLSX.utils.book_append_sheet(wb, ws, sheetName);
+                        }
+                    });
+                    XLSX.writeFile(wb, 'Manufacturing_Data_V3.xlsx');
+                } catch(err) { alert('Excel 匯出失敗：' + err.message); }
+                return;
+            }
+
+            // --- PNG / PDF 匯出 ---
+            if(format==='png' || format==='pdf') {
+                const target = document.querySelector('.tab-pane.active');
+                if(!target) { alert('請先切換到要匯出的頁面'); return; }
+
+                const isLight = document.body.classList.contains('light-mode');
+                const bgColor = isLight ? '#faf7f2' : '#0f172a';
+
+                // 1. 啟用匯出模式（純色不透明背景）
+                document.body.classList.add('export-mode');
+
+                // 2. 暫時讓 dashboard-container 不限高度
+                const container = document.querySelector('.dashboard-container');
+                const origOverflow = container.style.overflow;
+                const origHeight = container.style.height;
+                container.style.overflow = 'visible';
+                container.style.height = 'auto';
+
+                // 3. 給瀏覽器 100ms 完成 CSS 重繪
+                setTimeout(() => {
+                    html2canvas(target, {
+                        backgroundColor: bgColor,
+                        scale: 2,
+                        useCORS: true,
+                        logging: false,
+                        width: target.scrollWidth,
+                        height: target.scrollHeight,
+                        scrollX: 0,
+                        scrollY: 0,
+                        x: 0,
+                        y: 0,
+                        onclone: function(clonedDoc) {
+                            // 在克隆的 DOM 上再次確保所有背景不透明
+                            clonedDoc.body.style.backgroundColor = bgColor;
+                            clonedDoc.body.style.backgroundImage = 'none';
+                            const pane = clonedDoc.querySelector('.tab-pane.active');
+                            if(pane) { pane.style.opacity = '1'; pane.style.transform = 'none'; }
+                            clonedDoc.querySelectorAll('.glass-panel, .kpi-card, .chart-card, .traffic-card, .dax-card, .forecast-stat').forEach(el => {
+                                el.style.backgroundColor = isLight ? '#fff8ee' : '#1e293b';
+                                el.style.backdropFilter = 'none';
+                                el.style.webkitBackdropFilter = 'none';
+                                el.style.boxShadow = 'none';
+                            });
+                            clonedDoc.querySelectorAll('th').forEach(el => { el.style.backgroundColor = isLight ? '#f0e8da' : '#1e293b'; el.style.backdropFilter = 'none'; });
+                            clonedDoc.querySelectorAll('td').forEach(el => { el.style.backgroundColor = isLight ? '#faf7f2' : '#0f172a'; });
+                        }
+                    }).then(canvas => {
+                        // 4. 恢復原狀
+                        document.body.classList.remove('export-mode');
+                        container.style.overflow = origOverflow;
+                        container.style.height = origHeight;
+
+                        if(format==='png') {
+                            const a = document.createElement('a');
+                            a.href = canvas.toDataURL('image/png');
+                            a.download = 'dashboard_export.png';
+                            a.click();
+                        } else {
+                            try {
+                                const { jsPDF } = window.jspdf;
+                                const pdf = new jsPDF('l','mm','a4');
+                                const pageW = pdf.internal.pageSize.getWidth();
+                                const pageH = pdf.internal.pageSize.getHeight();
+                                const margin = 5;
+                                const imgW = pageW - margin * 2;
+                                const imgH = canvas.height * imgW / canvas.width;
+
+                                if(imgH <= pageH - margin * 2) {
+                                    pdf.addImage(canvas.toDataURL('image/png'), 'PNG', margin, margin, imgW, imgH);
+                                } else {
+                                    // 多頁：按頁高切割 canvas
+                                    const usableH = pageH - margin * 2;
+                                    const sliceCanvasH = Math.floor(canvas.height * usableH / imgH);
+                                    let yOffset = 0;
+                                    let pageNum = 0;
+                                    while(yOffset < canvas.height) {
+                                        if(pageNum > 0) pdf.addPage();
+                                        const sliceH = Math.min(sliceCanvasH, canvas.height - yOffset);
+                                        const sliceCanvas = document.createElement('canvas');
+                                        sliceCanvas.width = canvas.width;
+                                        sliceCanvas.height = sliceH;
+                                        const ctx = sliceCanvas.getContext('2d');
+                                        ctx.drawImage(canvas, 0, yOffset, canvas.width, sliceH, 0, 0, canvas.width, sliceH);
+                                        const sliceImgH = sliceH * imgW / canvas.width;
+                                        pdf.addImage(sliceCanvas.toDataURL('image/png'), 'PNG', margin, margin, imgW, sliceImgH);
+                                        yOffset += sliceH;
+                                        pageNum++;
+                                    }
+                                }
+                                pdf.save('dashboard_export.pdf');
+                            } catch(err) { alert('PDF 匯出失敗：' + err.message); }
+                        }
+                    }).catch(err => {
+                        document.body.classList.remove('export-mode');
+                        container.style.overflow = origOverflow;
+                        container.style.height = origHeight;
+                        alert('頁面擷取失敗：' + err.message);
+                    });
+                }, 150);  // 等 150ms 確保 export-mode CSS 完全生效
+                return;
+            }
+        });
+    });
+
+    // ===== 鑽取彈窗 =====
+    const drillBackdrop = document.getElementById('drill-backdrop');
+    const drillTitle = document.getElementById('drill-title');
+    const drillBody = document.getElementById('drill-body');
+    document.getElementById('drill-close').addEventListener('click', () => drillBackdrop.classList.remove('show'));
+    drillBackdrop.addEventListener('click', e => { if(e.target === drillBackdrop) drillBackdrop.classList.remove('show'); });
+    const showDrill = (title, html) => { drillTitle.textContent = title; drillBody.innerHTML = html; drillBackdrop.classList.add('show'); };
+
+    // ===== 驗證彈窗 =====
+    const valBackdrop = document.getElementById('validation-backdrop');
+    document.getElementById('validation-close').addEventListener('click', () => valBackdrop.classList.remove('show'));
+    valBackdrop.addEventListener('click', e => { if(e.target === valBackdrop) valBackdrop.classList.remove('show'); });
+
+    // ===== 資料上傳 =====
+    document.getElementById('file-upload').addEventListener('change', function(e) {
+        const file = e.target.files[0];
+        if(!file) return;
+        const reader = new FileReader();
+        reader.onload = function(ev) {
+            try {
+                const wb = XLSX.read(ev.target.result, {type:'binary'});
+                const report = [];
+                const sheetMap = { Materials:'materials', Suppliers:'suppliers', PurchaseOrders:'purchaseOrders', ProductionOrders:'productionOrders', Products:'products', InventorySnapshots:'inventorySnapshots', CostTypes:'costTypes' };
+                Object.entries(sheetMap).forEach(([sheet, key]) => {
+                    if(wb.SheetNames.includes(sheet)) {
+                        const data = XLSX.utils.sheet_to_json(wb.Sheets[sheet]);
+                        currentData[key] = data;
+                        report.push({ sheet, rows: data.length, status: 'success' });
+                    } else {
+                        report.push({ sheet, rows: 0, status: 'skipped' });
+                    }
+                });
+                // 顯示驗證報告
+                document.getElementById('validation-body').innerHTML = '<div class="validation-report">' +
+                    report.map(r => `<div class="validation-item"><span class="validation-icon">${r.status==='success'?'✅':'⏭️'}</span><span><b>${r.sheet}</b>：${r.status==='success'?`已載入 ${r.rows} 筆`:'未找到，保留範例資料'}</span></div>`).join('') +
+                    '</div>';
+                valBackdrop.classList.add('show');
+                renderActivePage();
+            } catch(err) { alert('檔案解析失敗：' + err.message); }
+        };
+        reader.readAsBinaryString(file);
+        this.value = '';
+    });
+
+    // ===== 載入範例資料 =====
+    document.getElementById('btn-reset').addEventListener('click', () => { currentData = generateSampleDataV3(); initDateFilter(); renderActivePage(); });
+
+    const initDateFilter = () => {
+        if(!currentData) return;
+        const allDates = [...currentData.purchaseOrders.map(p=>p.date), ...currentData.productionOrders.map(p=>p.date)].sort();
+        if(allDates.length) {
+            document.getElementById('date-start').value = allDates[0];
+            document.getElementById('date-end').value = allDates[allDates.length-1];
+        }
+    };
+    const renderActivePage = () => {
+        const ap = document.querySelector('.tab-pane.active');
+        if(ap && renderMap[ap.id]) renderMap[ap.id]();
+    };
+    // ===== Page 1: 首頁總覽 =====
+    renderMap['tab-overview'] = () => {
+        const d = currentData;
+        const pos = filterByDate(d.purchaseOrders);
+        const pros = filterByDate(d.productionOrders);
+        const totalInv = d.materials.reduce((s,m)=>s+m.stockQty*m.unitCost, 0);
+        const totalCostVar = pros.reduce((s,p)=>s+p.materialVar+p.laborVar+p.overheadVar, 0);
+        const avgDelivery = d.suppliers.reduce((s,sup)=>s+sup.onTimeDeliveryRate,0)/d.suppliers.length;
+        const avgYield = pros.length ? pros.reduce((s,p)=>s+p.yieldRate,0)/pros.length : 0;
+        const staleCount = d.materials.filter(m=>m.daysInStock>90).length;
+        const staleRatio = staleCount / d.materials.length;
+        const avgDelay = pos.length ? pos.reduce((s,p)=>s+p.delayDays,0)/pos.length : 0;
+        const costVarRate = pros.length ? Math.abs(totalCostVar) / pros.reduce((s,p)=>s+p.stdTotalCost,0) : 0;
+
+        document.getElementById('overview-kpis').innerHTML = `
+            <div class="glass-panel kpi-card kpi-purple"><span class="kpi-title">總庫存金額</span><span class="kpi-value">${fmt.currency(totalInv)}</span><span class="kpi-sub">${d.materials.length} 種物料</span></div>
+            <div class="glass-panel kpi-card kpi-success"><span class="kpi-title">平均交貨達標率</span><span class="kpi-value">${fmt.pct(avgDelivery)}</span><span class="kpi-sub">${d.suppliers.length} 家供應商</span></div>
+            <div class="glass-panel kpi-card kpi-danger"><span class="kpi-title">整體成本差異</span><span class="kpi-value">${fmt.currency(totalCostVar)}</span><span class="kpi-sub">${totalCostVar>0?'超支':'節約'} ${fmt.pct(costVarRate)}</span></div>
+            <div class="glass-panel kpi-card kpi-warning"><span class="kpi-title">整體生產良率</span><span class="kpi-value">${fmt.pct(avgYield)}</span><span class="kpi-sub">${pros.length} 筆工單</span></div>
+        `;
+        // 月度成本趨勢
+        const months = [...new Set(pros.map(p=>p.month))].sort();
+        const stdByMonth = months.map(m => pros.filter(p=>p.month===m).reduce((s,p)=>s+p.stdTotalCost*p.goodOutput,0));
+        const actByMonth = months.map(m => pros.filter(p=>p.month===m).reduce((s,p)=>s+p.actTotalCost*p.goodOutput,0));
+        initLineChart('chart-overview-cost', months, '成本趨勢', stdByMonth.map(v=>+(v/1e6).toFixed(2)), actByMonth.map(v=>+(v/1e6).toFixed(2)), '標準成本(M)', '實際成本(M)');
+        // ABC 佔比
+        const abcData = ['A','B','C'].map(c => d.materials.filter(m=>m.abcClass===c).reduce((s,m)=>s+m.stockQty*m.unitCost,0));
+        initDoughnutChart('chart-overview-inv', ['A 類','B 類','C 類'], abcData);
+        // 供應商績效
+        const top5 = [...d.suppliers].sort((a,b)=>b.compositeScore-a.compositeScore).slice(0,5);
+        initBarChart('chart-overview-sup', top5.map(s=>s.name), '綜合評分', top5.map(s=>s.compositeScore), true);
+        // 異常摘要雷達
+        const invScore = Math.min(100, Math.round((1-staleRatio)*100));
+        const supScore = Math.min(100, Math.round(avgDelivery*100));
+        const costScore = Math.min(100, Math.round((1-costVarRate)*100));
+        const yieldScore = Math.min(100, Math.round(avgYield*100));
+        initRadarChart('chart-overview-anomaly', ['庫存健康','供應商交期','成本控制','生產良率'], '健康度', [invScore, supScore, costScore, yieldScore]);
+    };
+
+    // ===== Page 2: 異常預警雷達 =====
+    renderMap['tab-anomaly'] = () => {
+        const d = currentData;
+        const pros = filterByDate(d.productionOrders);
+        const pos = filterByDate(d.purchaseOrders);
+        const staleRatio = d.materials.filter(m=>m.daysInStock>90).length / d.materials.length;
+        const avgDelayRate = pos.length ? pos.filter(p=>p.delayDays>0).length / pos.length : 0;
+        const totalVar = pros.reduce((s,p)=>s+Math.abs(p.materialVar+p.laborVar+p.overheadVar),0);
+        const totalStd = pros.reduce((s,p)=>s+p.stdTotalCost,0);
+        const costVarRate = totalStd ? totalVar/totalStd : 0;
+
+        const getLight = (val, t1, t2) => val > t2 ? 'red' : val > t1 ? 'yellow' : 'green';
+        const invLight = getLight(staleRatio, 0.1, 0.2);
+        const supLight = getLight(avgDelayRate, 0.08, 0.15);
+        const costLight = getLight(costVarRate, 0.02, 0.05);
+
+        document.getElementById('anomaly-lights').innerHTML = [
+            { name:'庫存健康度', light:invLight, score:fmt.pct(1-staleRatio), detail:`呆滯料比例 ${fmt.pct(staleRatio)}` },
+            { name:'供應商交期', light:supLight, score:fmt.pct(1-avgDelayRate), detail:`遲交率 ${fmt.pct(avgDelayRate)}` },
+            { name:'成本控制', light:costLight, score:fmt.pct(1-costVarRate), detail:`差異率 ${fmt.pct(costVarRate)}` },
+        ].map(item => `
+            <div class="glass-panel traffic-card">
+                <div class="light light-${item.light}">${item.light==='green'?'✓':item.light==='yellow'?'!':'✗'}</div>
+                <div class="domain-name">${item.name}</div>
+                <div class="kpi-value" style="font-size:1.5rem">${item.score}</div>
+                <div class="domain-score">${item.detail}</div>
+            </div>
+        `).join('');
+
+        // 雷達圖
+        const scores = [
+            Math.round((1-staleRatio)*100),
+            Math.round((1-avgDelayRate)*100),
+            Math.round((1-costVarRate)*100),
+            Math.round((pros.length ? pros.reduce((s,p)=>s+p.yieldRate,0)/pros.length : 0)*100),
+            Math.round(d.suppliers.reduce((s,sup)=>s+sup.compositeScore,0)/d.suppliers.length),
+        ];
+        initRadarChart('chart-anomaly-radar', ['庫存','交期','成本','良率','供應商'], '健康度', scores);
+
+        // 趨勢（月度異常數）
+        const months = [...new Set(pros.map(p=>p.month))].sort();
+        const anomalyByMonth = months.map(m => {
+            const mp = pros.filter(p=>p.month===m);
+            return mp.filter(p=>Math.abs(p.materialVar+p.laborVar+p.overheadVar)/p.stdTotalCost > 0.05).length;
+        });
+        initBarChart('chart-anomaly-trend', months, '異常工單數', anomalyByMonth, false, anomalyByMonth.map(v=>v>3?'#ef4444':v>1?'#f59e0b':'#10b981'));
+
+        // Top 異常項目
+        const abnormals = pros.map(p=>({...p, varRate: p.stdTotalCost ? Math.abs(p.materialVar+p.laborVar+p.overheadVar)/p.stdTotalCost : 0}))
+            .filter(p=>p.varRate>0.02).sort((a,b)=>b.varRate-a.varRate).slice(0,10);
+        document.getElementById('table-anomaly-detail').innerHTML = `<table><thead><tr><th>工單</th><th>產品</th><th>產線</th><th>差異率</th><th>狀態</th></tr></thead><tbody>${
+            abnormals.map(p=>`<tr><td>${p.orderId}</td><td>${p.productName}</td><td>${p.line}</td><td>${fmt.pct(p.varRate)}</td><td><span class="status-badge ${p.varRate>0.05?'badge-danger':p.varRate>0.02?'badge-warning':'badge-success'}">${p.varRate>0.05?'嚴重':p.varRate>0.02?'注意':'正常'}</span></td></tr>`).join('')
+        }</tbody></table>`;
+    };
+    // ===== Page 3: 庫存效能 =====
+    renderMap['tab-inv-efficiency'] = () => {
+        const d = currentData;
+        const totalStockValue = d.materials.reduce((s,m)=>s+m.stockQty*m.unitCost, 0);
+        const totalMonthlyUsage = d.materials.reduce((s,m)=>s+m.monthlyUsage*m.unitCost, 0);
+        const avgTurnover = totalMonthlyUsage > 0 ? (totalStockValue / (totalMonthlyUsage/30)).toFixed(1) : 'N/A';
+        const skuTotal = d.materials.length;
+        const skuActive = d.materials.filter(m=>m.monthlyUsage>0).length;
+        const turnoverRate = skuTotal ? (skuActive/skuTotal) : 0;
+
+        document.getElementById('inv-eff-kpis').innerHTML = `
+            <div class="glass-panel kpi-card kpi-purple"><span class="kpi-title">總庫存金額</span><span class="kpi-value">${fmt.currency(totalStockValue)}</span></div>
+            <div class="glass-panel kpi-card"><span class="kpi-title">平均週轉天數</span><span class="kpi-value">${avgTurnover} 天</span></div>
+            <div class="glass-panel kpi-card kpi-success"><span class="kpi-title">在檔 SKU</span><span class="kpi-value">${skuTotal}</span></div>
+            <div class="glass-panel kpi-card kpi-warning"><span class="kpi-title">動銷率</span><span class="kpi-value">${fmt.pct(turnoverRate)}</span></div>
+        `;
+        // 庫存趨勢（從快照）
+        if(d.inventorySnapshots && d.inventorySnapshots.length) {
+            const snapMonths = [...new Set(d.inventorySnapshots.map(s=>s.date.slice(0,7)))].sort();
+            const monthlyValues = snapMonths.map(m => d.inventorySnapshots.filter(s=>s.date.startsWith(m)).reduce((sum,s)=>sum+s.value,0));
+            initLineChart('chart-inv-trend', snapMonths, '庫存金額', monthlyValues.map(v=>+(v/1e6).toFixed(2)), monthlyValues.map(()=>+(totalMonthlyUsage/1e6).toFixed(2)), '庫存金額(M)', '月消耗(M)');
+        }
+        // ABC 分類
+        const abcData = ['A','B','C'].map(c => d.materials.filter(m=>m.abcClass===c).reduce((s,m)=>s+m.stockQty*m.unitCost,0));
+        initDoughnutChart('chart-inv-abc', ['A 類 (高價值)','B 類 (中等)','C 類 (低價值)'], abcData);
+        // Top 10 明細
+        const top10 = [...d.materials].sort((a,b)=>(b.stockQty*b.unitCost)-(a.stockQty*a.unitCost)).slice(0,10);
+        document.getElementById('table-inv-detail').innerHTML = `<table><thead><tr><th>物料</th><th>類別</th><th>ABC</th><th>單價</th><th>庫存量</th><th>庫存金額</th><th>在庫天數</th></tr></thead><tbody>${
+            top10.map(m=>`<tr class="clickable" onclick="showDrill('${m.name} 明細','<p>物料編號：${m.id}<br>類別：${m.category}<br>類型：${m.type}<br>安全庫存：${fmt.num(m.safetyStock)}<br>再訂購點：${fmt.num(m.reorderPoint)}<br>前置時間：${m.leadTimeDays} 天</p>')"><td>${m.name}</td><td>${m.category}</td><td><span class="status-badge badge-${m.abcClass==='A'?'danger':m.abcClass==='B'?'warning':'info'}">${m.abcClass}</span></td><td>${fmt.currency(m.unitCost)}</td><td>${fmt.num(m.stockQty)}</td><td>${fmt.currency(m.stockQty*m.unitCost)}</td><td>${m.daysInStock}</td></tr>`).join('')
+        }</tbody></table>`;
+    };
+
+    // ===== Page 4: 呆滯與風險 =====
+    renderMap['tab-inv-risk'] = () => {
+        const d = currentData;
+        const stale = d.materials.filter(m=>m.daysInStock>90);
+        const staleValue = stale.reduce((s,m)=>s+m.stockQty*m.unitCost, 0);
+        const totalValue = d.materials.reduce((s,m)=>s+m.stockQty*m.unitCost, 0);
+        const specialCount = d.materials.filter(m=>m.type==='專用料').length;
+        const generalCount = d.materials.filter(m=>m.type==='通用料').length;
+        const auxCount = d.materials.filter(m=>m.type==='輔料'||m.type==='非生產用料').length;
+
+        document.getElementById('inv-risk-kpis').innerHTML = `
+            <div class="glass-panel kpi-card kpi-danger"><span class="kpi-title">超期庫存金額 (>90天)</span><span class="kpi-value">${fmt.currency(staleValue)}</span><span class="kpi-sub">佔比 ${fmt.pct(totalValue?staleValue/totalValue:0)}</span></div>
+            <div class="glass-panel kpi-card kpi-warning"><span class="kpi-title">超期物料數</span><span class="kpi-value">${stale.length} 項</span></div>
+            <div class="glass-panel kpi-card"><span class="kpi-title">專用料</span><span class="kpi-value">${specialCount} 項</span></div>
+            <div class="glass-panel kpi-card kpi-success"><span class="kpi-title">通用料</span><span class="kpi-value">${generalCount} 項</span></div>
+        `;
+        // 庫齡瀑布圖
+        const ageBuckets = [
+            { label:'0-30天', count: d.materials.filter(m=>m.daysInStock<=30).reduce((s,m)=>s+m.stockQty*m.unitCost,0) },
+            { label:'31-60天', count: d.materials.filter(m=>m.daysInStock>30&&m.daysInStock<=60).reduce((s,m)=>s+m.stockQty*m.unitCost,0) },
+            { label:'61-90天', count: d.materials.filter(m=>m.daysInStock>60&&m.daysInStock<=90).reduce((s,m)=>s+m.stockQty*m.unitCost,0) },
+            { label:'91-180天', count: d.materials.filter(m=>m.daysInStock>90&&m.daysInStock<=180).reduce((s,m)=>s+m.stockQty*m.unitCost,0) },
+            { label:'>180天', count: d.materials.filter(m=>m.daysInStock>180).reduce((s,m)=>s+m.stockQty*m.unitCost,0) },
+        ];
+        initBarChart('chart-risk-waterfall', ageBuckets.map(b=>b.label), '庫存金額', ageBuckets.map(b=>b.count), false,
+            ['#10b981','#3b82f6','#f59e0b','#ef4444','#dc2626']);
+        // 通用 vs 專用
+        initDoughnutChart('chart-risk-type', ['專用料','通用料','輔料/非生產'], [specialCount, generalCount, auxCount]);
+        // 消耗率
+        const consumeData = d.materials.map(m=>({name:m.name, rate: m.stockQty>0 ? m.monthlyUsage/m.stockQty : 0})).sort((a,b)=>a.rate-b.rate).slice(0,8);
+        initBarChart('chart-risk-consume', consumeData.map(c=>c.name), '月消耗率', consumeData.map(c=>+(c.rate*100).toFixed(1)), true);
+    };
+
+    // ===== Page 5: 價格與降本 =====
+    renderMap['tab-sup-price'] = () => {
+        const d = currentData;
+        const pos = filterByDate(d.purchaseOrders);
+        const totalPurchase = pos.reduce((s,p)=>s+p.totalAmount, 0);
+        const supplierCount = new Set(pos.map(p=>p.supplierId)).size;
+        const avgPrice = pos.length ? totalPurchase / pos.reduce((s,p)=>s+p.qty,0) : 0;
+
+        document.getElementById('sup-price-kpis').innerHTML = `
+            <div class="glass-panel kpi-card kpi-purple"><span class="kpi-title">總採購金額</span><span class="kpi-value">${fmt.currency(totalPurchase)}</span></div>
+            <div class="glass-panel kpi-card"><span class="kpi-title">供應商數</span><span class="kpi-value">${supplierCount}</span></div>
+            <div class="glass-panel kpi-card kpi-info"><span class="kpi-title">平均採購單價</span><span class="kpi-value">${fmt.currency(avgPrice)}</span></div>
+            <div class="glass-panel kpi-card kpi-success"><span class="kpi-title">訂單數</span><span class="kpi-value">${pos.length}</span></div>
+        `;
+        // 帕雷托（供應商採購金額排名 + 累計佔比）
+        const supAmounts = {};
+        pos.forEach(p => { supAmounts[p.supplierName] = (supAmounts[p.supplierName]||0) + p.totalAmount; });
+        const sorted = Object.entries(supAmounts).sort((a,b)=>b[1]-a[1]);
+        const labels = sorted.map(s=>s[0]);
+        const amounts = sorted.map(s=>s[1]);
+        let cumSum = 0;
+        const cumPct = amounts.map(a => { cumSum += a; return +(cumSum/totalPurchase*100).toFixed(1); });
+        destroyChart('chart-sup-pareto');
+        const ctx = document.getElementById('chart-sup-pareto');
+        if(ctx) {
+            window.mfgCharts['chart-sup-pareto'] = new Chart(ctx, {
+                data: { labels, datasets: [
+                    { type:'bar', label:'採購金額', data:amounts.map(a=>+(a/1e3).toFixed(1)), backgroundColor:'#3b82f6', borderRadius:6, yAxisID:'y' },
+                    { type:'line', label:'累計佔比(%)', data:cumPct, borderColor:'#f59e0b', backgroundColor:'transparent', tension:0.3, yAxisID:'y1', pointRadius:4 }
+                ]},
+                options: { responsive:true, maintainAspectRatio:false, plugins:{legend:{position:'top'},datalabels:{display:false}},
+                    scales:{ y:{position:'left',title:{display:true,text:'金額(k)'},grid:{color:'var(--chart-grid)'}}, y1:{position:'right',min:0,max:100,title:{display:true,text:'累計%'},grid:{display:false}} } }
+            });
+        }
+        // 類別佔比
+        const catAmounts = {};
+        pos.forEach(p => { const sup = d.suppliers.find(s=>s.id===p.supplierId); const cat = sup?sup.category:'其他'; catAmounts[cat]=(catAmounts[cat]||0)+p.totalAmount; });
+        initDoughnutChart('chart-sup-category', Object.keys(catAmounts), Object.values(catAmounts));
+    };
+    // ===== Page 6: 採購時效與交期 =====
+    renderMap['tab-sup-time'] = () => {
+        const d = currentData;
+        const pos = filterByDate(d.purchaseOrders);
+        const totalOrders = pos.length;
+        const lateOrders = pos.filter(p=>p.delayDays>0);
+        const lateRate = totalOrders ? lateOrders.length/totalOrders : 0;
+        const avgDelay = lateOrders.length ? lateOrders.reduce((s,p)=>s+p.delayDays,0)/lateOrders.length : 0;
+        const avgLead = totalOrders ? pos.reduce((s,p)=>s+p.actualLeadTime,0)/totalOrders : 0;
+
+        document.getElementById('sup-time-kpis').innerHTML = `
+            <div class="glass-panel kpi-card"><span class="kpi-title">總訂單數</span><span class="kpi-value">${totalOrders}</span></div>
+            <div class="glass-panel kpi-card kpi-danger"><span class="kpi-title">遲交率</span><span class="kpi-value">${fmt.pct(lateRate)}</span><span class="kpi-sub">${lateOrders.length} 筆遲交</span></div>
+            <div class="glass-panel kpi-card kpi-warning"><span class="kpi-title">平均遲交天數</span><span class="kpi-value">${avgDelay.toFixed(1)} 天</span></div>
+            <div class="glass-panel kpi-card kpi-info"><span class="kpi-title">平均採購周期</span><span class="kpi-value">${avgLead.toFixed(1)} 天</span></div>
+        `;
+        // 散佈圖
+        const scatterData = {};
+        pos.forEach(p => {
+            if(!scatterData[p.supplierName]) scatterData[p.supplierName] = [];
+            scatterData[p.supplierName].push({x:p.qty, y:p.delayDays});
+        });
+        const colors = ['#3b82f6','#10b981','#f59e0b','#ef4444','#8b5cf6','#0ea5e9','#ec4899','#14b8a6','#6366f1','#84cc16','#f97316','#06b6d4'];
+        const datasets = Object.entries(scatterData).slice(0,8).map(([name,data],i) => ({
+            label:name, data, backgroundColor:colors[i%colors.length], pointRadius:5
+        }));
+        initScatterChart('chart-sup-scatter', datasets);
+        // 遲交 Top 供應商
+        const delayBySup = {};
+        lateOrders.forEach(p => { delayBySup[p.supplierName] = (delayBySup[p.supplierName]||0) + p.delayDays; });
+        const topDelay = Object.entries(delayBySup).sort((a,b)=>b[1]-a[1]).slice(0,8);
+        initBarChart('chart-sup-delay', topDelay.map(d=>d[0]), '累計遲交天數', topDelay.map(d=>d[1]), true, topDelay.map((_,i)=>i<3?'#ef4444':'#f59e0b'));
+        // 月度準交率
+        const months = [...new Set(pos.map(p=>p.date.slice(0,7)))].sort();
+        const onTimeByMonth = months.map(m => {
+            const mp = pos.filter(p=>p.date.startsWith(m));
+            return mp.length ? +(mp.filter(p=>p.delayDays===0).length/mp.length*100).toFixed(1) : 0;
+        });
+        destroyChart('chart-sup-ontime');
+        const ctx = document.getElementById('chart-sup-ontime');
+        if(ctx) {
+            window.mfgCharts['chart-sup-ontime'] = new Chart(ctx, {
+                type:'line', data:{ labels:months, datasets:[{label:'準交率(%)',data:onTimeByMonth,borderColor:'#10b981',backgroundColor:'rgba(16,185,129,0.1)',fill:true,tension:0.4}] },
+                options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},datalabels:{display:false}},scales:{y:{min:0,max:100,grid:{color:'var(--chart-grid)'}},x:{grid:{display:false}}}}
+            });
+        }
+    };
+
+    // ===== Page 7: 供應商評分卡 =====
+    renderMap['tab-sup-perf'] = () => {
+        const d = currentData;
+        const pos = filterByDate(d.purchaseOrders);
+        const preferred = d.suppliers.filter(s=>s.tier==='Preferred').length;
+        const approved = d.suppliers.filter(s=>s.tier==='Approved').length;
+        const atRisk = d.suppliers.filter(s=>s.tier==='At-Risk').length;
+
+        document.getElementById('sup-perf-kpis').innerHTML = `
+            <div class="glass-panel kpi-card kpi-success"><span class="kpi-title">Preferred</span><span class="kpi-value">${preferred}</span></div>
+            <div class="glass-panel kpi-card kpi-warning"><span class="kpi-title">Approved</span><span class="kpi-value">${approved}</span></div>
+            <div class="glass-panel kpi-card kpi-danger"><span class="kpi-title">At-Risk</span><span class="kpi-value">${atRisk}</span></div>
+            <div class="glass-panel kpi-card"><span class="kpi-title">供應商總數</span><span class="kpi-value">${d.suppliers.length}</span></div>
+        `;
+        // 評分卡表格
+        const sorted = [...d.suppliers].sort((a,b)=>b.compositeScore-a.compositeScore);
+        document.getElementById('table-sup-scorecard').innerHTML = `<table><thead><tr><th>供應商</th><th>類別</th><th>綜合分</th><th>交期</th><th>品質</th><th>服務</th><th>Tier</th></tr></thead><tbody>${
+            sorted.map(s=>`<tr class="clickable" data-sup-id="${s.id}"><td>${s.name}</td><td>${s.category}</td><td><b>${s.compositeScore}</b></td><td>${fmt.pct(s.onTimeDeliveryRate)}</td><td>${s.qualityScore}</td><td>${s.serviceScore}</td><td><span class="status-badge badge-${s.tier==='Preferred'?'preferred':s.tier==='Approved'?'approved':'at-risk'}">${s.tier}</span></td></tr>`).join('')
+        }</tbody></table>`;
+        // 點擊更新雷達
+        document.querySelectorAll('#table-sup-scorecard tr.clickable').forEach(row => {
+            row.addEventListener('click', () => {
+                const sup = d.suppliers.find(s=>s.id===row.dataset.supId);
+                if(sup) initRadarChart('chart-sup-radar', ['評分','交期','品質','服務','技術'], sup.name, [sup.rating, Math.round(sup.onTimeDeliveryRate*100), sup.qualityScore, sup.serviceScore, sup.techScore]);
+            });
+        });
+        // 預設顯示第一家
+        if(sorted.length) initRadarChart('chart-sup-radar', ['評分','交期','品質','服務','技術'], sorted[0].name, [sorted[0].rating, Math.round(sorted[0].onTimeDeliveryRate*100), sorted[0].qualityScore, sorted[0].serviceScore, sorted[0].techScore]);
+    };
+
+    // ===== Page 8: BOM 結構解析 =====
+    renderMap['tab-cost-bom'] = () => {
+        const d = currentData;
+        if(!d.products || !d.products.length) return;
+        const totalProducts = d.products.length;
+        const totalBomItems = d.products.reduce((s,p)=>s+p.bom.length, 0);
+        const avgBomDepth = (totalBomItems / totalProducts).toFixed(1);
+
+        document.getElementById('cost-bom-kpis').innerHTML = `
+            <div class="glass-panel kpi-card"><span class="kpi-title">成品種類</span><span class="kpi-value">${totalProducts}</span></div>
+            <div class="glass-panel kpi-card kpi-info"><span class="kpi-title">BOM 項目總數</span><span class="kpi-value">${totalBomItems}</span></div>
+            <div class="glass-panel kpi-card kpi-purple"><span class="kpi-title">平均 BOM 深度</span><span class="kpi-value">${avgBomDepth}</span></div>
+        `;
+        // BOM 成本分解（堆疊長條）
+        const prodLabels = d.products.map(p=>p.name);
+        const matCosts = d.products.map(p => p.bom.reduce((s,b)=>{ const m=d.materials.find(x=>x.id===b.matId); return s+(m?m.unitCost*b.qty:0); },0));
+        const laborCosts = d.products.map(p => p.stdLaborHrs * 250);
+        const ohCosts = d.products.map(p => p.stdMachHrs * 400);
+        destroyChart('chart-bom-cost');
+        const ctx = document.getElementById('chart-bom-cost');
+        if(ctx) {
+            window.mfgCharts['chart-bom-cost'] = new Chart(ctx, {
+                type:'bar', data:{ labels:prodLabels, datasets:[
+                    {label:'直接材料',data:matCosts,backgroundColor:'#3b82f6',borderRadius:4},
+                    {label:'直接人工',data:laborCosts,backgroundColor:'#10b981',borderRadius:4},
+                    {label:'製造費用',data:ohCosts,backgroundColor:'#f59e0b',borderRadius:4}
+                ]},
+                options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'top'},datalabels:{display:false}},scales:{x:{stacked:true},y:{stacked:true,grid:{color:'var(--chart-grid)'}}}}
+            });
+        }
+        // BOM 展平矩陣
+        const rows = [];
+        d.products.forEach(p => {
+            p.bom.forEach(b => {
+                const m = d.materials.find(x=>x.id===b.matId);
+                rows.push({ product:p.name, matId:b.matId, matName:m?m.name:b.matId, qty:b.qty, unitCost:m?m.unitCost:0, totalCost:m?m.unitCost*b.qty:0 });
+            });
+        });
+        document.getElementById('table-bom-matrix').innerHTML = `<table><thead><tr><th>成品</th><th>物料</th><th>用量</th><th>單價</th><th>小計</th></tr></thead><tbody>${
+            rows.map(r=>`<tr><td>${r.product}</td><td>${r.matName}</td><td>${r.qty}</td><td>${fmt.currency(r.unitCost)}</td><td>${fmt.currency(r.totalCost)}</td></tr>`).join('')
+        }</tbody></table>`;
+    };
+    // ===== Page 9: 生產數據與良率 =====
+    renderMap['tab-cost-yield'] = () => {
+        const d = currentData;
+        const pros = filterByDate(d.productionOrders);
+        const avgYield = pros.length ? pros.reduce((s,p)=>s+p.yieldRate,0)/pros.length : 0;
+        const totalInput = pros.reduce((s,p)=>s+p.inputQty, 0);
+        const totalGood = pros.reduce((s,p)=>s+p.goodOutput, 0);
+        const totalDefect = pros.reduce((s,p)=>s+p.defectQty, 0);
+
+        document.getElementById('cost-yield-kpis').innerHTML = `
+            <div class="glass-panel kpi-card kpi-success"><span class="kpi-title">平均良率</span><span class="kpi-value">${fmt.pct(avgYield)}</span></div>
+            <div class="glass-panel kpi-card"><span class="kpi-title">總投入量</span><span class="kpi-value">${fmt.num(totalInput)}</span></div>
+            <div class="glass-panel kpi-card kpi-info"><span class="kpi-title">良品數</span><span class="kpi-value">${fmt.num(totalGood)}</span></div>
+            <div class="glass-panel kpi-card kpi-danger"><span class="kpi-title">不良品數</span><span class="kpi-value">${fmt.num(totalDefect)}</span></div>
+        `;
+        // 良率趨勢
+        const months = [...new Set(pros.map(p=>p.month))].sort();
+        const yieldByMonth = months.map(m => { const mp=pros.filter(p=>p.month===m); return mp.length ? +(mp.reduce((s,p)=>s+p.yieldRate,0)/mp.length*100).toFixed(1) : 0; });
+        destroyChart('chart-yield-line');
+        const ctx1 = document.getElementById('chart-yield-line');
+        if(ctx1) {
+            window.mfgCharts['chart-yield-line'] = new Chart(ctx1, {
+                type:'line', data:{labels:months, datasets:[
+                    {label:'良率(%)',data:yieldByMonth,borderColor:'#10b981',backgroundColor:'rgba(16,185,129,0.1)',fill:true,tension:0.4},
+                    {label:'目標(97%)',data:months.map(()=>97),borderColor:'#ef4444',borderDash:[5,5],pointRadius:0}
+                ]},
+                options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'top'},datalabels:{display:false}},scales:{y:{min:90,max:100,grid:{color:'var(--chart-grid)'}},x:{grid:{display:false}}}}
+            });
+        }
+        // 各產線平均良率
+        const lines = [...new Set(pros.map(p=>p.line))];
+        const lineYields = lines.map(l => { const lp=pros.filter(p=>p.line===l); return lp.length ? +(lp.reduce((s,p)=>s+p.yieldRate,0)/lp.length*100).toFixed(1) : 0; });
+        initBarChart('chart-yield-avg', lines, '良率(%)', lineYields, false, lineYields.map(v=>v>=97?'#10b981':v>=95?'#f59e0b':'#ef4444'));
+        // 良率熱力圖
+        const products = [...new Set(pros.map(p=>p.productName))];
+        let heatHtml = '<table><thead><tr><th>產品 \\ 產線</th>' + lines.map(l=>`<th>${l}</th>`).join('') + '</tr></thead><tbody>';
+        products.forEach(prod => {
+            heatHtml += `<tr><td>${prod}</td>`;
+            lines.forEach(line => {
+                const cells = pros.filter(p=>p.productName===prod && p.line===line);
+                const val = cells.length ? (cells.reduce((s,p)=>s+p.yieldRate,0)/cells.length*100).toFixed(1) : '-';
+                const color = val==='-' ? 'transparent' : val>=97 ? 'rgba(16,185,129,0.3)' : val>=95 ? 'rgba(245,158,11,0.3)' : 'rgba(239,68,68,0.3)';
+                heatHtml += `<td class="heatmap-cell" style="background:${color}">${val}%</td>`;
+            });
+            heatHtml += '</tr>';
+        });
+        heatHtml += '</tbody></table>';
+        document.getElementById('table-yield-heatmap').innerHTML = heatHtml;
+    };
+
+    // ===== Page 10: 成本組成結構 =====
+    renderMap['tab-cost-struct'] = () => {
+        const d = currentData;
+        const pros = filterByDate(d.productionOrders);
+        const totalActCost = pros.reduce((s,p)=>s+p.actTotalCost*p.goodOutput, 0);
+        const totalMat = pros.reduce((s,p)=>s+p.actMaterialCost*p.goodOutput, 0);
+        const totalLabor = pros.reduce((s,p)=>s+p.actLaborCost*p.goodOutput, 0);
+        const totalOH = pros.reduce((s,p)=>s+p.actOverheadCost*p.goodOutput, 0);
+
+        document.getElementById('cost-struct-kpis').innerHTML = `
+            <div class="glass-panel kpi-card kpi-purple"><span class="kpi-title">總製造成本</span><span class="kpi-value">${fmt.currency(totalActCost)}</span></div>
+            <div class="glass-panel kpi-card kpi-info"><span class="kpi-title">直接材料佔比</span><span class="kpi-value">${fmt.pct(totalActCost?totalMat/totalActCost:0)}</span></div>
+            <div class="glass-panel kpi-card kpi-success"><span class="kpi-title">直接人工佔比</span><span class="kpi-value">${fmt.pct(totalActCost?totalLabor/totalActCost:0)}</span></div>
+            <div class="glass-panel kpi-card kpi-warning"><span class="kpi-title">製造費用佔比</span><span class="kpi-value">${fmt.pct(totalActCost?totalOH/totalActCost:0)}</span></div>
+        `;
+        // 料工費堆疊趨勢
+        const months = [...new Set(pros.map(p=>p.month))].sort();
+        const matByMonth = months.map(m=>pros.filter(p=>p.month===m).reduce((s,p)=>s+p.actMaterialCost*p.goodOutput,0));
+        const labByMonth = months.map(m=>pros.filter(p=>p.month===m).reduce((s,p)=>s+p.actLaborCost*p.goodOutput,0));
+        const ohByMonth = months.map(m=>pros.filter(p=>p.month===m).reduce((s,p)=>s+p.actOverheadCost*p.goodOutput,0));
+        initStackedAreaChart('chart-cost-trend', months, [
+            {label:'直接材料',data:matByMonth.map(v=>+(v/1e6).toFixed(2)),borderColor:'#3b82f6',backgroundColor:'rgba(59,130,246,0.3)'},
+            {label:'直接人工',data:labByMonth.map(v=>+(v/1e6).toFixed(2)),borderColor:'#10b981',backgroundColor:'rgba(16,185,129,0.3)'},
+            {label:'製造費用',data:ohByMonth.map(v=>+(v/1e6).toFixed(2)),borderColor:'#f59e0b',backgroundColor:'rgba(245,158,11,0.3)'}
+        ]);
+        // 成本組成比例
+        initDoughnutChart('chart-cost-pie', ['直接材料','直接人工','製造費用'], [totalMat, totalLabor, totalOH]);
+    };
+
+    // ===== Page 11: 成本差異追蹤 =====
+    renderMap['tab-cost-var'] = () => {
+        const d = currentData;
+        const pros = filterByDate(d.productionOrders);
+        const totalMatVar = pros.reduce((s,p)=>s+p.materialVar*p.goodOutput, 0);
+        const totalLabVar = pros.reduce((s,p)=>s+p.laborVar*p.goodOutput, 0);
+        const totalOHVar = pros.reduce((s,p)=>s+p.overheadVar*p.goodOutput, 0);
+        const totalVar = totalMatVar + totalLabVar + totalOHVar;
+        const totalStd = pros.reduce((s,p)=>s+p.stdTotalCost*p.goodOutput, 0);
+
+        document.getElementById('cost-var-kpis').innerHTML = `
+            <div class="glass-panel kpi-card ${totalVar>0?'kpi-danger':'kpi-success'}"><span class="kpi-title">總成本差異</span><span class="kpi-value">${fmt.currency(totalVar)}</span><span class="kpi-sub">${totalVar>0?'超支':'節約'} ${fmt.pct(totalStd?Math.abs(totalVar)/totalStd:0)}</span></div>
+            <div class="glass-panel kpi-card kpi-info"><span class="kpi-title">材料差異</span><span class="kpi-value">${fmt.currency(totalMatVar)}</span></div>
+            <div class="glass-panel kpi-card kpi-warning"><span class="kpi-title">人工差異</span><span class="kpi-value">${fmt.currency(totalLabVar)}</span></div>
+            <div class="glass-panel kpi-card kpi-purple"><span class="kpi-title">製費差異</span><span class="kpi-value">${fmt.currency(totalOHVar)}</span></div>
+        `;
+        // 瀑布圖
+        initWaterfallChart('chart-cost-waterfall', ['材料差異','人工差異','製費差異','總差異'], [totalMatVar, totalLabVar, totalOHVar, totalVar]);
+        // 異常工單表
+        const abnormals = pros.map(p=>({...p, totalVar:p.materialVar+p.laborVar+p.overheadVar, varRate:p.stdTotalCost?Math.abs(p.materialVar+p.laborVar+p.overheadVar)/p.stdTotalCost:0}))
+            .filter(p=>p.varRate>0.02).sort((a,b)=>b.varRate-a.varRate).slice(0,15);
+        const flagIcon = rate => rate>=0.05?'🚩':rate>=0.02?'⚠️':rate>=0.01?'🔶':'';
+        document.getElementById('table-cost-abnormal').innerHTML = `<table><thead><tr><th>工單</th><th>產品</th><th>產線</th><th>材料差異</th><th>人工差異</th><th>製費差異</th><th>差異率</th><th>預警</th></tr></thead><tbody>${
+            abnormals.map(p=>`<tr><td>${p.orderId}</td><td>${p.productName}</td><td>${p.line}</td><td>${fmt.currency(p.materialVar)}</td><td>${fmt.currency(p.laborVar)}</td><td>${fmt.currency(p.overheadVar)}</td><td>${fmt.pct(p.varRate)}</td><td>${flagIcon(p.varRate)}</td></tr>`).join('')
+        }</tbody></table>`;
+    };
+    // ===== Page 12: 根因分析鑽取 =====
+    renderMap['tab-cost-rca'] = () => {
+        const d = currentData;
+        const pros = filterByDate(d.productionOrders);
+        const dim = document.getElementById('rca-dimension').value;
+        let groupKey;
+        if(dim==='supplier') groupKey = p => { const mat = d.materials.find(m=>d.products.find(pr=>pr.bom.some(b=>b.matId===m.id))); return mat ? (d.suppliers.find(s=>s.id===mat.supplierId)||{}).name||'未知' : '未知'; };
+        else if(dim==='line') groupKey = p => p.line;
+        else groupKey = p => p.productName;
+
+        const groups = {};
+        pros.forEach(p => {
+            const key = groupKey(p);
+            if(!groups[key]) groups[key] = {matVar:0,labVar:0,ohVar:0,count:0};
+            groups[key].matVar += p.materialVar * p.goodOutput;
+            groups[key].labVar += p.laborVar * p.goodOutput;
+            groups[key].ohVar += p.overheadVar * p.goodOutput;
+            groups[key].count++;
+        });
+
+        const totalVar = pros.reduce((s,p)=>s+(p.materialVar+p.laborVar+p.overheadVar)*p.goodOutput, 0);
+        document.getElementById('cost-rca-kpis').innerHTML = `
+            <div class="glass-panel kpi-card ${totalVar>0?'kpi-danger':'kpi-success'}"><span class="kpi-title">總差異（${dim==='supplier'?'供應商':dim==='line'?'產線':'產品'}維度）</span><span class="kpi-value">${fmt.currency(totalVar)}</span></div>
+            <div class="glass-panel kpi-card"><span class="kpi-title">分組數</span><span class="kpi-value">${Object.keys(groups).length}</span></div>
+        `;
+        // 差異排名
+        const sorted = Object.entries(groups).map(([k,v])=>({name:k,...v,total:v.matVar+v.labVar+v.ohVar})).sort((a,b)=>Math.abs(b.total)-Math.abs(a.total));
+        initBarChart('chart-rca-rank', sorted.slice(0,8).map(s=>s.name), '總差異', sorted.slice(0,8).map(s=>s.total), true, sorted.slice(0,8).map(s=>s.total>0?'#ef4444':'#10b981'));
+        // 瀑布（最大差異項的料工費分解）
+        if(sorted.length) {
+            const top = sorted[0];
+            initWaterfallChart('chart-rca-waterfall', ['材料差異','人工差異','製費差異','總計'], [top.matVar, top.labVar, top.ohVar, top.total]);
+        }
+    };
+    document.getElementById('rca-dimension').addEventListener('change', () => { if(currentData) renderMap['tab-cost-rca'](); });
+
+    // ===== Page 13: 滾動預測 =====
+    renderMap['tab-forecast'] = () => {
+        const d = currentData;
+        const pros = filterByDate(d.productionOrders);
+        const months = [...new Set(pros.map(p=>p.month))].sort();
+        const costByMonth = months.map(m => pros.filter(p=>p.month===m).reduce((s,p)=>s+p.actTotalCost*p.goodOutput,0));
+
+        // 線性回歸
+        const n = costByMonth.length;
+        let sumX=0, sumY=0, sumXY=0, sumX2=0;
+        costByMonth.forEach((y,i) => { sumX+=i; sumY+=y; sumXY+=i*y; sumX2+=i*i; });
+        const slope = n>1 ? (n*sumXY - sumX*sumY)/(n*sumX2 - sumX*sumX) : 0;
+        const intercept = n>0 ? (sumY - slope*sumX)/n : 0;
+        const r2 = (() => {
+            const mean = sumY/n;
+            const ssTot = costByMonth.reduce((s,y)=>s+(y-mean)**2,0);
+            const ssRes = costByMonth.reduce((s,y,i)=>s+(y-(intercept+slope*i))**2,0);
+            return ssTot>0 ? 1-ssRes/ssTot : 0;
+        })();
+
+        // 預測 3 個月
+        const forecastMonths = [];
+        if(months.length) {
+            const lastDate = new Date(months[months.length-1]+'-01');
+            for(let i=1;i<=3;i++) {
+                const fd = new Date(lastDate); fd.setMonth(fd.getMonth()+i);
+                forecastMonths.push(fd.toISOString().slice(0,7));
+            }
+        }
+        const forecastValues = forecastMonths.map((_,i) => Math.max(0, intercept + slope*(n+i)));
+        const allLabels = [...months, ...forecastMonths];
+        const actualData = [...costByMonth, ...forecastMonths.map(()=>null)];
+        const trendData = allLabels.map((_,i) => intercept + slope*i);
+        const forecastData = [...months.map(()=>null), ...forecastValues];
+
+        document.getElementById('forecast-info').innerHTML = `
+            <div class="glass-panel forecast-stat"><div class="label">斜率（月變化）</div><div class="value">${fmt.currency(slope)}</div></div>
+            <div class="glass-panel forecast-stat"><div class="label">R² 擬合度</div><div class="value">${r2.toFixed(3)}</div></div>
+            <div class="glass-panel forecast-stat"><div class="label">下月預測</div><div class="value">${forecastValues.length?fmt.currency(forecastValues[0]):'N/A'}</div></div>
+            <div class="glass-panel forecast-stat"><div class="label">3月後預測</div><div class="value">${forecastValues.length>=3?fmt.currency(forecastValues[2]):'N/A'}</div></div>
+        `;
+        destroyChart('chart-forecast');
+        const ctx = document.getElementById('chart-forecast');
+        if(ctx) {
+            window.mfgCharts['chart-forecast'] = new Chart(ctx, {
+                type:'line', data:{ labels:allLabels, datasets:[
+                    {label:'實際成本',data:actualData.map(v=>v!==null?+(v/1e6).toFixed(2):null),borderColor:'#3b82f6',backgroundColor:'rgba(59,130,246,0.1)',fill:false,tension:0.3,spanGaps:false},
+                    {label:'趨勢線',data:trendData.map(v=>+(v/1e6).toFixed(2)),borderColor:'#94a3b8',borderDash:[5,5],pointRadius:0,fill:false},
+                    {label:'預測',data:forecastData.map(v=>v!==null?+(v/1e6).toFixed(2):null),borderColor:'#f59e0b',backgroundColor:'rgba(245,158,11,0.15)',fill:true,tension:0.3,borderDash:[8,4],spanGaps:false}
+                ]},
+                options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'top'},datalabels:{display:false}},scales:{y:{title:{display:true,text:'成本(M)'},grid:{color:'var(--chart-grid)'}},x:{grid:{display:false}}}}
+            });
+        }
+    };
+
+    // ===== Page 14: DAX 知識庫 =====
+    const daxFormulas = [
+        {cat:'庫存',title:'成品期末庫存金額',code:'成品期末库存金额 =\nVAR X = LASTDATE(\'D日期表\'[Date])\nRETURN CALCULATE(\n    SUMX(\'F成品库存明细\', [结存金额]),\n    \'D日期表\'[Date] = X\n)',explain:'使用 LASTDATE 取得當前篩選上下文中的最後一天，確保期末庫存只取快照而非加總。'},
+        {cat:'庫存',title:'動銷率',code:'动销率 = DIVIDE([在售SKU数], [在档SKU数])',explain:'DIVIDE 函數自動處理除以零的情況，比 IF 判斷更簡潔安全。'},
+        {cat:'庫存',title:'近三月平均庫存',code:'近三月平均库存 = CALCULATE(\n    AVERAGEX(VALUES(\'D日期表\'[Date]), [成品期末库存金额]),\n    DATESINPERIOD(\'D日期表\'[Date], MAX(\'D日期表\'[Date]), -3, MONTH)\n)',explain:'DATESINPERIOD 以當前最大日期為基準向前推 3 個月，是滾動計算的標準寫法。'},
+        {cat:'庫存',title:'原料分類（SWITCH TRUE）',code:'原料类型 =\nSWITCH(\n    TRUE(),\n    [原料生产成品种类数量] > 5, "通用料",\n    [原料生产成品种类数量] > 0, "专用料",\n    "非生产用料"\n)',explain:'SWITCH(TRUE(), ...) 等同 IF-ELSEIF 串聯，比嵌套 IF 更易讀，按順序判斷。'},
+        {cat:'供應商價格',title:'平均採購單價',code:'平均采购价格 = DIVIDE([采购金额], [采购入库数量]) * 10000',explain:'乘以 10000 是因為原始金額單位為萬元，需換算為元。'},
+        {cat:'供應商價格',title:'最低採購單價（去重）',code:'最低采购单价 = MINX(\n    FILTER(\n        SUMMARIZE(\'F采购到货单\', [供应商], [订单号], [存货编码]),\n        CALCULATE(AVERAGE([原币单价])) > 0\n    ),\n    CALCULATE(AVERAGE([原币单价]))\n)',explain:'先用 SUMMARIZE 去重到訂單粒度，再 MINX 取最小值，避免同一訂單多次到貨重複計算。'},
+        {cat:'供應商價格',title:'帕雷托排名',code:'原材料消耗排名 = RANKX(\n    ALL(\'D原材料档案\'[一级分类]),\n    [原料出库金额], , DESC\n)',explain:'RANKX 搭配 ALL 確保排名不受切片器篩選影響，始終基於全部分類計算。'},
+        {cat:'供應商時效',title:'採購周期（天數）',code:'采购周期最早(天数) = IF(\n    [采购到货时间最早] > [采购下单日期],\n    DATEDIFF([采购下单日期], [采购到货时间最早], DAY),\n    BLANK()\n)',explain:'DATEDIFF 計算兩個日期之間的天數差，BLANK() 處理異常情況（到貨早於下單）。'},
+        {cat:'供應商時效',title:'平均遲交天數（ADDCOLUMNS）',code:'晚于计划采购周期平均天数 =\nVAR X = ADDCOLUMNS(\n    FILTER(VALUES(\'D采购订单号\'[订单编号]),\n        [差异] > 0),\n    "差异天数", [差异]\n)\nRETURN AVERAGEX(X, [差异天数])',explain:'ADDCOLUMNS 先附加計算欄位，再 AVERAGEX 求平均，是「先篩再聚合」的標準模式。'},
+        {cat:'生產成本',title:'母件產量（去重）',code:'母件产量 =\nVAR T = SUMMARIZE(\n    \'F生产成本明细\',\n    [存货编码], [订单号], [订单行号], [产量]\n)\nRETURN SUMX(T, [产量])',explain:'同一工單的多個子件行會重複產量，必須先 SUMMARIZE 到訂單粒度再 SUMX。'},
+        {cat:'生產成本',title:'上期產量（DATEADD）',code:'母件产量上期 = CALCULATE(\n    [母件产量],\n    DATEADD(\'D日期表\'[Date], -1, MONTH)\n)',explain:'DATEADD 將日期上下文偏移 -1 個月，是環比計算的核心函數。'},
+        {cat:'生產成本',title:'趨勢折線（日期輔助表）',code:'母件产量趋势 =\nVAR X = DATESINPERIOD(\'D日期表\'[Date], MAX(\'D日期表\'[Date]), -1, YEAR)\nVAR Y = VALUES(\'D日期辅助表\'[Date])\nVAR Z = CALCULATE([母件产量], INTERSECT(X, Y))\nRETURN Z',explain:'INTERSECT 取兩個日期集合的交集，輔助表不受切片器影響，確保趨勢圖始終顯示完整 12 個月。'},
+        {cat:'成本差異',title:'單位成本差異率',code:'单位成本差异率 = DIVIDE(\n    [单位生产成本] - [单位生产成本上期],\n    [单位生产成本上期]\n)',explain:'環比差異率 = (本期 - 上期) / 上期，正值表示成本上升。'},
+        {cat:'成本差異',title:'異動預警（ABS）',code:'单位成本异动提醒 = ABS([单位成本差异率])',explain:'取絕對值後配合條件格式：<1% 無圖標、1-2% 黃旗、2-5% 全黃旗、>5% 紅旗。'},
+        {cat:'成本差異',title:'TREATAS 跨模型篩選',code:'采购趋势 =\nVAR X = DATESINPERIOD(\'D日期表\'[Date], MAX(\'D日期表\'[Date]), -12, MONTH)\nVAR Y = VALUES(\'D日期辅助表\'[Date])\nRETURN CALCULATE(\n    [平均采购价格],\n    TREATAS(VALUES(\'D合并物料表\'[存货编码]), \'原材料档案\'[存货编码]),\n    INTERSECT(X, Y)\n)',explain:'TREATAS 將一個列的值強制套用到另一個列的篩選上下文，解決無關係路徑的跨表篩選問題。'},
+        {cat:'進階',title:'計算群組（Calculation Groups）',code:'// 時間比較計算群組\n本期: SELECTEDMEASURE()\n上期: CALCULATE(SELECTEDMEASURE(), DATEADD(\'D日期表\'[Date], -1, MONTH))\n差異額: [本期] - [上期]\n差異率: DIVIDE([本期] - [上期], [上期])',explain:'50+ 個度量值無需各自寫上期公式，統一由計算群組管理，維護成本降低 80%。'},
+        {cat:'進階',title:'欄位參數（Field Parameters）',code:'分析维度 = {\n    ("供应商", NAMEOF(\'D供应商\'[供应商名称]), 0),\n    ("物料一级", NAMEOF(\'D原材料档案\'[一级分类]), 1),\n    ("产品", NAMEOF(\'D成品档案\'[存货名称]), 2)\n}',explain:'使用者自行切換分析維度，一張圖表替代多張圖表，報告頁數減少 40%。'},
+    ];
+    const daxCategories = [...new Set(daxFormulas.map(f=>f.cat))];
+
+    renderMap['tab-dax-kb'] = () => {
+        const tabsEl = document.getElementById('dax-tabs');
+        const contentEl = document.getElementById('dax-content');
+        let activeCat = 'all';
+
+        const renderDax = (cat, search='') => {
+            let filtered = cat==='all' ? daxFormulas : daxFormulas.filter(f=>f.cat===cat);
+            if(search) { const q=search.toLowerCase(); filtered=filtered.filter(f=>f.title.toLowerCase().includes(q)||f.code.toLowerCase().includes(q)||f.explain.toLowerCase().includes(q)); }
+            contentEl.innerHTML = filtered.map(f=>`
+                <div class="glass-panel dax-card">
+                    <h4>[${f.cat}] ${f.title}</h4>
+                    <pre>${f.code}</pre>
+                    <div class="dax-explain">${f.explain}</div>
+                </div>
+            `).join('') || '<p style="color:var(--text-secondary);padding:20px;">未找到匹配的公式</p>';
+        };
+
+        tabsEl.innerHTML = `<button class="dax-tab active" data-cat="all">全部</button>` +
+            daxCategories.map(c=>`<button class="dax-tab" data-cat="${c}">${c}</button>`).join('');
+        tabsEl.querySelectorAll('.dax-tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                tabsEl.querySelectorAll('.dax-tab').forEach(t=>t.classList.remove('active'));
+                tab.classList.add('active');
+                activeCat = tab.dataset.cat;
+                renderDax(activeCat, document.getElementById('dax-search').value);
+            });
+        });
+        document.getElementById('dax-search').addEventListener('input', e => renderDax(activeCat, e.target.value));
+        renderDax('all');
+    };
+
+    // ===== V3 Extended Data Generator =====
+    const generateSampleDataV3 = () => {
+        const base = generateSampleDataV2();
+        const months12 = [];
+        for(let m=0; m<12; m++) months12.push(new Date(2024, m, 1).toISOString().slice(0,7));
+
+        base.ironTriangle = months12.map(m => ({
+            month: m, inventoryScore: Math.round(70+Math.random()*20),
+            supplierScore: Math.round(75+Math.random()*20), costScore: Math.round(65+Math.random()*25),
+        }));
+
+        const totalInv = base.materials.reduce((s,m)=>s+m.stockQty*m.unitCost,0);
+        base.cashFlow = {
+            lastYearInventory: Math.round(totalInv*0.85), newPurchases: Math.round(totalInv*0.6),
+            productionConsumption: Math.round(totalInv*0.45), staleAccumulation: Math.round(totalInv*0.08),
+            currentInventory: totalInv, capitalTiedRate: 0.32,
+            cashReleasePotential: Math.round(totalInv*0.15), staleAmount: Math.round(totalInv*0.08),
+            earlyDeliveryCost: Math.round(totalInv*0.03),
+        };
+
+        base.riskMatrix = [
+            {category:'缺料風險',probability:0.35,impact:0.85,severity:'high',trend:[0.3,0.28,0.32,0.35,0.33,0.35],items:['M-IC-01 處理器晶片','M-DP-01 顯示面板']},
+            {category:'價格波動',probability:0.55,impact:0.6,severity:'medium',trend:[0.4,0.45,0.5,0.52,0.55,0.55],items:['M-CA-01 MLCC電容','M-RE-01 SMD電阻']},
+            {category:'品質退貨',probability:0.2,impact:0.7,severity:'medium',trend:[0.25,0.22,0.2,0.18,0.2,0.2],items:['M-ME-01 鋁合金機殼']},
+            {category:'交期延遲',probability:0.4,impact:0.75,severity:'high',trend:[0.35,0.38,0.4,0.42,0.4,0.4],items:['S004 鴻海金屬機殼','S010 華碩精密']},
+            {category:'單一供應商依賴',probability:0.6,impact:0.9,severity:'critical',trend:[0.55,0.58,0.6,0.6,0.6,0.6],items:['M-IC-01 (僅S005)','M-PW-01 (僅S007)']},
+        ];
+
+        base.purchaseOrders.forEach(po => { po.cycleDays = po.actualLeadTime + Math.floor(Math.random()*10); });
+
+        base.valueStream = [
+            {name:'原材料採購',cycleTime:14.0,waitTime:3.0,valueAddRatio:0.45,bottleneck:false},
+            {name:'入庫檢驗',cycleTime:1.5,waitTime:2.0,valueAddRatio:0.65,bottleneck:false},
+            {name:'庫存存放',cycleTime:0.5,waitTime:15.0,valueAddRatio:0.05,bottleneck:true},
+            {name:'生產投料',cycleTime:0.5,waitTime:1.0,valueAddRatio:0.70,bottleneck:false},
+            {name:'加工製造',cycleTime:4.0,waitTime:2.0,valueAddRatio:0.80,bottleneck:false},
+            {name:'品質檢測',cycleTime:2.0,waitTime:3.0,valueAddRatio:0.60,bottleneck:true},
+            {name:'成品入庫',cycleTime:0.5,waitTime:1.0,valueAddRatio:0.30,bottleneck:false},
+            {name:'出貨',cycleTime:1.0,waitTime:0.5,valueAddRatio:0.50,bottleneck:false},
+        ];
+
+        base.benchmark = {
+            dimensions:['庫存週轉','準交率','良率','單位成本','供應商集中度'],
+            company:[72,88,96,78,65], industryAvg:[65,82,93,70,60], industryBest:[90,97,99,92,85],
+        };
+        return base;
+    };
+
+    // ===== Page 15: 核心三角儀表 =====
+    renderMap['tab-iron-triangle'] = () => {
+        const d = currentData;
+        const pros = filterByDate(d.productionOrders);
+        const staleRatio = d.materials.filter(m=>m.daysInStock>90).length / d.materials.length;
+        const avgDelivery = d.suppliers.reduce((s,sup)=>s+sup.onTimeDeliveryRate,0)/d.suppliers.length;
+        const totalVar = pros.reduce((s,p)=>s+Math.abs(p.materialVar+p.laborVar+p.overheadVar),0);
+        const totalStd = pros.reduce((s,p)=>s+p.stdTotalCost,0);
+        const costVarRate = totalStd ? totalVar/totalStd : 0;
+        const invScore = Math.round((1-staleRatio)*100);
+        const supScore = Math.round(avgDelivery*100);
+        const costScore = Math.round((1-costVarRate)*100);
+        const overallScore = Math.round((invScore+supScore+costScore)/3);
+        const isDark = !document.body.classList.contains('light-mode');
+        const textColor = isDark ? '#f8fafc' : '#2c2418';
+        const mutedColor = isDark ? '#94a3b8' : '#7a6e5e';
+        const bgFill = isDark ? '#1e293b' : '#fff8ee';
+        const scoreColor = s => s>=85 ? '#10b981' : s>=70 ? '#f59e0b' : '#ef4444';
+        const svg = document.getElementById('iron-triangle-svg');
+        svg.innerHTML = `
+            <defs><filter id="glow"><feGaussianBlur stdDeviation="3" result="cb"/><feMerge><feMergeNode in="cb"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+            <linearGradient id="triGrad" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="rgba(59,130,246,0.1)"/><stop offset="100%" stop-color="rgba(139,92,246,0.1)"/></linearGradient></defs>
+            <polygon points="200,30 50,330 350,330" fill="url(#triGrad)" stroke="${isDark?'rgba(255,255,255,0.15)':'rgba(0,0,0,0.1)'}" stroke-width="2"/>
+            <line x1="200" y1="30" x2="50" y2="330" stroke="rgba(59,130,246,0.3)" stroke-width="1" stroke-dasharray="4,4"/>
+            <line x1="50" y1="330" x2="350" y2="330" stroke="rgba(16,185,129,0.3)" stroke-width="1" stroke-dasharray="4,4"/>
+            <line x1="350" y1="330" x2="200" y2="30" stroke="rgba(245,158,11,0.3)" stroke-width="1" stroke-dasharray="4,4"/>
+            <g class="vertex-score" onclick="switchTab('tab-inv-efficiency')"><circle cx="200" cy="30" r="32" fill="${scoreColor(invScore)}" opacity="0.2" filter="url(#glow)"/><circle cx="200" cy="30" r="24" fill="${bgFill}" stroke="${scoreColor(invScore)}" stroke-width="3"/><text x="200" y="36" text-anchor="middle" fill="${scoreColor(invScore)}" font-size="14" font-weight="700">${invScore}</text><text x="200" y="8" text-anchor="middle" fill="${mutedColor}" font-size="11">庫存效率</text></g>
+            <g class="vertex-score" onclick="switchTab('tab-sup-perf')"><circle cx="50" cy="330" r="32" fill="${scoreColor(supScore)}" opacity="0.2" filter="url(#glow)"/><circle cx="50" cy="330" r="24" fill="${bgFill}" stroke="${scoreColor(supScore)}" stroke-width="3"/><text x="50" y="336" text-anchor="middle" fill="${scoreColor(supScore)}" font-size="14" font-weight="700">${supScore}</text><text x="50" y="370" text-anchor="middle" fill="${mutedColor}" font-size="11">供應商績效</text></g>
+            <g class="vertex-score" onclick="switchTab('tab-cost-struct')"><circle cx="350" cy="330" r="32" fill="${scoreColor(costScore)}" opacity="0.2" filter="url(#glow)"/><circle cx="350" cy="330" r="24" fill="${bgFill}" stroke="${scoreColor(costScore)}" stroke-width="3"/><text x="350" y="336" text-anchor="middle" fill="${scoreColor(costScore)}" font-size="14" font-weight="700">${costScore}</text><text x="350" y="370" text-anchor="middle" fill="${mutedColor}" font-size="11">成本控制</text></g>
+            <circle cx="200" cy="220" r="40" fill="${isDark?'rgba(30,41,59,0.8)':'rgba(255,248,238,0.9)'}" stroke="${scoreColor(overallScore)}" stroke-width="3"/>
+            <text x="200" y="215" text-anchor="middle" fill="${scoreColor(overallScore)}" font-size="22" font-weight="700">${overallScore}</text>
+            <text x="200" y="237" text-anchor="middle" fill="${mutedColor}" font-size="10">整體健康</text>`;
+        const avgTurnoverDays = d.materials.reduce((s,m)=>s+m.daysInStock,0)/d.materials.length;
+        document.getElementById('iron-triangle-kpis').innerHTML = `
+            <div class="glass-panel kpi-card"><span class="kpi-title">庫存週轉天數</span><span class="kpi-value">${avgTurnoverDays.toFixed(0)} 天</span><span class="kpi-sub">目標 &lt; 60 天</span></div>
+            <div class="glass-panel kpi-card kpi-success"><span class="kpi-title">供應商達交率</span><span class="kpi-value">${fmt.pct(avgDelivery)}</span><span class="kpi-sub">目標 &gt; 95%</span></div>
+            <div class="glass-panel kpi-card kpi-warning"><span class="kpi-title">成本差異率</span><span class="kpi-value">${fmt.pct(costVarRate)}</span><span class="kpi-sub">目標 &lt; 3%</span></div>`;
+        if(d.ironTriangle){
+            const months=d.ironTriangle.map(t=>t.month);
+            destroyChart('chart-triangle-trend');
+            const ctx=document.getElementById('chart-triangle-trend');
+            if(ctx){window.mfgCharts['chart-triangle-trend']=new Chart(ctx,{type:'line',data:{labels:months,datasets:[
+                {label:'庫存效率',data:d.ironTriangle.map(t=>t.inventoryScore),borderColor:'#3b82f6',fill:false,tension:0.4},
+                {label:'供應商績效',data:d.ironTriangle.map(t=>t.supplierScore),borderColor:'#10b981',fill:false,tension:0.4},
+                {label:'成本控制',data:d.ironTriangle.map(t=>t.costScore),borderColor:'#f59e0b',fill:false,tension:0.4}
+            ]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'top'},datalabels:{display:false}},scales:{y:{min:50,max:100,grid:{color:'var(--chart-grid)'}},x:{grid:{display:false}}}}});}
+        }
+        const avgYield = pros.length?pros.reduce((s,p)=>s+p.yieldRate,0)/pros.length:0;
+        initRadarChart('chart-triangle-radar',['庫存效率','供應商績效','成本控制','生產良率','資金效率'],'當前得分',[invScore,supScore,costScore,Math.round(avgYield*100),Math.round((1-0.32)*100)]);
+    };
+
+    // ===== Page 16: 資金佔用分析 =====
+    renderMap['tab-cashflow'] = () => {
+        const d=currentData; const cf=d.cashFlow; if(!cf) return;
+        const pos=filterByDate(d.purchaseOrders);
+        document.getElementById('cashflow-kpis').innerHTML = `
+            <div class="glass-panel kpi-card kpi-purple"><span class="kpi-title">資金佔用率</span><span class="kpi-value">${fmt.pct(cf.capitalTiedRate)}</span></div>
+            <div class="glass-panel kpi-card kpi-success"><span class="kpi-title">資金釋放潛力</span><span class="kpi-value">${fmt.currency(cf.cashReleasePotential)}</span></div>
+            <div class="glass-panel kpi-card kpi-danger"><span class="kpi-title">呆滯金額</span><span class="kpi-value">${fmt.currency(cf.staleAmount)}</span></div>
+            <div class="glass-panel kpi-card kpi-warning"><span class="kpi-title">早到貨隱性成本</span><span class="kpi-value">${fmt.currency(cf.earlyDeliveryCost)}</span></div>`;
+        initWaterfallChart('chart-cash-waterfall',['去年庫存','+新增採購','-生產消耗','+呆滯積壓','本期庫存'],[cf.lastYearInventory,cf.newPurchases,-cf.productionConsumption,cf.staleAccumulation,cf.currentInventory]);
+        destroyChart('chart-cash-gauge');
+        const ctx2=document.getElementById('chart-cash-gauge');
+        if(ctx2){const rate=cf.capitalTiedRate*100;window.mfgCharts['chart-cash-gauge']=new Chart(ctx2,{type:'doughnut',data:{labels:['佔用','可用'],datasets:[{data:[rate,100-rate],backgroundColor:['#ef4444','rgba(255,255,255,0.1)'],borderWidth:0}]},options:{responsive:true,maintainAspectRatio:false,cutout:'75%',plugins:{legend:{display:false},datalabels:{display:false}}}});}
+        const earlyAmt=pos.filter(p=>p.actualLeadTime<p.standardLeadTime).reduce((s,p)=>s+p.totalAmount,0);
+        const onTimeAmt=pos.filter(p=>p.delayDays===0).reduce((s,p)=>s+p.totalAmount,0);
+        const lateAmt=pos.filter(p=>p.delayDays>0).reduce((s,p)=>s+p.totalAmount,0);
+        initBarChart('chart-cash-delivery',['早到貨','準時','遲到'],'資金影響',[earlyAmt,onTimeAmt,lateAmt],false,['#f59e0b','#10b981','#ef4444']);
+        const specValue=d.materials.filter(m=>m.type==='專用料').reduce((s,m)=>s+m.stockQty*m.unitCost,0);
+        const genValue=d.materials.filter(m=>m.type==='通用料').reduce((s,m)=>s+m.stockQty*m.unitCost,0);
+        const auxValue=d.materials.filter(m=>m.type==='輔料'||m.type==='非生產用料').reduce((s,m)=>s+m.stockQty*m.unitCost,0);
+        initDoughnutChart('chart-cash-type',['專用料','通用料','輔料'],[specValue,genValue,auxValue]);
+    };
+
+    // ===== Page 17: 供應鏈風險矩陣 =====
+    renderMap['tab-risk-matrix'] = () => {
+        const d=currentData; const rm=d.riskMatrix; if(!rm) return;
+        const criticalCount=rm.filter(r=>r.severity==='critical').length;
+        const highCount=rm.filter(r=>r.severity==='high').length;
+        const medCount=rm.filter(r=>r.severity==='medium').length;
+        document.getElementById('risk-matrix-kpis').innerHTML = `
+            <div class="glass-panel kpi-card kpi-danger"><span class="kpi-title">嚴重風險 Critical</span><span class="kpi-value">${criticalCount}</span></div>
+            <div class="glass-panel kpi-card kpi-warning"><span class="kpi-title">高風險 High</span><span class="kpi-value">${highCount}</span></div>
+            <div class="glass-panel kpi-card"><span class="kpi-title">中風險 Medium</span><span class="kpi-value">${medCount}</span></div>
+            <div class="glass-panel kpi-card kpi-success"><span class="kpi-title">風險類別數</span><span class="kpi-value">${rm.length}</span></div>`;
+        destroyChart('chart-risk-bubble');
+        const ctx=document.getElementById('chart-risk-bubble');
+        if(ctx){
+            const sColors={critical:'rgba(239,68,68,0.7)',high:'rgba(245,158,11,0.7)',medium:'rgba(59,130,246,0.7)',low:'rgba(16,185,129,0.7)'};
+            window.mfgCharts['chart-risk-bubble']=new Chart(ctx,{type:'bubble',
+                data:{datasets:rm.map(r=>({label:r.category,data:[{x:r.probability*100,y:r.impact*100,r:12+r.items.length*5}],backgroundColor:sColors[r.severity]||'rgba(100,100,100,0.5)',borderColor:'transparent'}))},
+                options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'top'},datalabels:{display:false},tooltip:{callbacks:{label:c=>`${c.dataset.label}: 機率${c.raw.x.toFixed(0)}%, 影響${c.raw.y.toFixed(0)}%`}}},
+                    scales:{x:{title:{display:true,text:'發生機率 (%)'},min:0,max:100,grid:{color:'var(--chart-grid)'}},y:{title:{display:true,text:'影響程度 (%)'},min:0,max:100,grid:{color:'var(--chart-grid)'}}}}});
+        }
+        destroyChart('chart-risk-trends');
+        const ctx2=document.getElementById('chart-risk-trends');
+        if(ctx2){
+            const tLabels=['M-7','M-6','M-5','M-4','M-3','M-2'];
+            const colors=['#ef4444','#f59e0b','#3b82f6','#8b5cf6','#10b981'];
+            window.mfgCharts['chart-risk-trends']=new Chart(ctx2,{type:'line',
+                data:{labels:tLabels,datasets:rm.map((r,i)=>({label:r.category,data:r.trend.map(v=>+(v*100).toFixed(1)),borderColor:colors[i%colors.length],backgroundColor:'transparent',tension:0.4,pointRadius:3,borderWidth:2}))},
+                options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{font:{size:10}}},datalabels:{display:false}},scales:{y:{title:{display:true,text:'風險指數'},grid:{color:'var(--chart-grid)'}},x:{grid:{display:false}}}}});
+        }
+        const allItems=[];
+        rm.forEach(r=>{r.items.forEach(item=>{allItems.push({item,category:r.category,probability:r.probability,impact:r.impact,severity:r.severity,score:Math.round(r.probability*r.impact*100),action:r.severity==='critical'?'立即建立替代供應商':'加強監控並制定應急計畫'});});});
+        allItems.sort((a,b)=>b.score-a.score);
+        document.getElementById('table-risk-top10').innerHTML=`<table><thead><tr><th>項目</th><th>風險類別</th><th>機率</th><th>影響</th><th>風險分數</th><th>建議行動</th></tr></thead><tbody>${allItems.slice(0,10).map(r=>`<tr><td>${r.item}</td><td>${r.category}</td><td>${fmt.pct(r.probability)}</td><td>${fmt.pct(r.impact)}</td><td><span class="status-badge ${r.severity==='critical'?'badge-danger':r.severity==='high'?'badge-warning':'badge-info'}">${r.score}</span></td><td style="font-size:0.75rem">${r.action}</td></tr>`).join('')}</tbody></table>`;
+    };
+
+    // ===== Page 18: 採購效率象限 =====
+    renderMap['tab-procurement-quad'] = () => {
+        const d=currentData; const pos=filterByDate(d.purchaseOrders);
+        if(!pos.length) return;
+        const avgCycle=pos.reduce((s,p)=>s+(p.cycleDays||p.actualLeadTime),0)/pos.length;
+        const sorted=[...pos].sort((a,b)=>a.totalAmount-b.totalAmount);
+        const medianAmount=sorted[Math.floor(sorted.length/2)].totalAmount;
+        const xT=avgCycle,yT=medianAmount;
+        const quadrants={
+            strategic:pos.filter(p=>(p.cycleDays||p.actualLeadTime)>=xT&&p.totalAmount>=yT),
+            inefficient:pos.filter(p=>(p.cycleDays||p.actualLeadTime)>=xT&&p.totalAmount<yT),
+            fast:pos.filter(p=>(p.cycleDays||p.actualLeadTime)<xT&&p.totalAmount<yT),
+            urgent:pos.filter(p=>(p.cycleDays||p.actualLeadTime)<xT&&p.totalAmount>=yT),
+        };
+        document.getElementById('procurement-quad-kpis').innerHTML=`
+            <div class="glass-panel kpi-card"><span class="kpi-title">平均採購週期</span><span class="kpi-value">${avgCycle.toFixed(1)} 天</span></div>
+            <div class="glass-panel kpi-card kpi-purple"><span class="kpi-title">中位數採購金額</span><span class="kpi-value">${fmt.currency(medianAmount)}</span></div>
+            <div class="glass-panel kpi-card kpi-warning"><span class="kpi-title">效率異常 Zone B</span><span class="kpi-value">${quadrants.inefficient.length} 筆</span></div>
+            <div class="glass-panel kpi-card kpi-success"><span class="kpi-title">快速採購 Zone C</span><span class="kpi-value">${quadrants.fast.length} 筆</span></div>`;
+        destroyChart('chart-proc-scatter');
+        const ctx=document.getElementById('chart-proc-scatter');
+        if(ctx){
+            const qC={strategic:'#8b5cf6',inefficient:'#ef4444',fast:'#10b981',urgent:'#f59e0b'};
+            const qL={strategic:'戰略採購(A)',inefficient:'效率異常(B)',fast:'快速採購(C)',urgent:'緊急採購(D)'};
+            window.mfgCharts['chart-proc-scatter']=new Chart(ctx,{type:'scatter',
+                data:{datasets:Object.entries(quadrants).map(([k,items])=>({label:qL[k],data:items.slice(0,50).map(p=>({x:p.cycleDays||p.actualLeadTime,y:p.totalAmount})),backgroundColor:qC[k],pointRadius:5,pointHoverRadius:7}))},
+                options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'top'},datalabels:{display:false},tooltip:{callbacks:{label:c=>`${c.dataset.label}: ${c.raw.x}天, ${fmt.currency(c.raw.y)}`}}},
+                    scales:{x:{title:{display:true,text:'採購週期 (天)'},grid:{color:'var(--chart-grid)'}},y:{title:{display:true,text:'採購金額'},grid:{color:'var(--chart-grid)'}}}}});
+        }
+        document.getElementById('quadrant-stats').innerHTML=`
+            <div class="glass-panel quadrant-stat"><div class="q-label">A 戰略採購</div><div class="q-value" style="color:#8b5cf6">${quadrants.strategic.length} 筆</div><div class="q-count">大額長週期</div></div>
+            <div class="glass-panel quadrant-stat"><div class="q-label" style="color:var(--danger)">B 效率異常</div><div class="q-value" style="color:#ef4444">${quadrants.inefficient.length} 筆</div><div class="q-count">小額長週期</div></div>
+            <div class="glass-panel quadrant-stat"><div class="q-label">C 快速採購</div><div class="q-value" style="color:#10b981">${quadrants.fast.length} 筆</div><div class="q-count">小額短週期</div></div>
+            <div class="glass-panel quadrant-stat"><div class="q-label">D 緊急採購</div><div class="q-value" style="color:#f59e0b">${quadrants.urgent.length} 筆</div><div class="q-count">大額短週期</div></div>`;
+        const zoneB=quadrants.inefficient.sort((a,b)=>(b.cycleDays||b.actualLeadTime)-(a.cycleDays||a.actualLeadTime)).slice(0,15);
+        document.getElementById('table-proc-anomaly').innerHTML=`<table><thead><tr><th>PO</th><th>物料</th><th>供應商</th><th>週期(天)</th><th>金額</th><th>狀態</th></tr></thead><tbody>${zoneB.map(p=>`<tr><td>${p.poNumber}</td><td>${p.materialName}</td><td>${p.supplierName}</td><td>${p.cycleDays||p.actualLeadTime}</td><td>${fmt.currency(p.totalAmount)}</td><td><span class="status-badge badge-danger">效率異常</span></td></tr>`).join('')}</tbody></table>`;
+    };
+
+    // ===== Page 19: 情境模擬器 =====
+    const renderSimulator = () => {
+        const d=currentData; if(!d) return;
+        const pros=filterByDate(d.productionOrders); if(!pros.length) return;
+        const priceChange=parseFloat(document.getElementById('sim-price').value)/100;
+        const yieldChange=parseFloat(document.getElementById('sim-yield').value)/100;
+        const volumeChange=parseFloat(document.getElementById('sim-volume').value)/100;
+        const baseMat=pros.reduce((s,p)=>s+p.actMaterialCost*p.goodOutput,0);
+        const baseLabor=pros.reduce((s,p)=>s+p.actLaborCost*p.goodOutput,0);
+        const baseOH=pros.reduce((s,p)=>s+p.actOverheadCost*p.goodOutput,0);
+        const baseTotal=baseMat+baseLabor+baseOH;
+        const baseVolume=pros.reduce((s,p)=>s+p.goodOutput,0);
+        const baseUnitCost=baseTotal/baseVolume;
+        const simMat=baseMat*(1+priceChange);
+        const avgYield=pros.reduce((s,p)=>s+p.yieldRate,0)/pros.length;
+        const newYield=Math.min(1,Math.max(0.5,avgYield+yieldChange));
+        const yieldImpact=avgYield/newYield;
+        const simLabor=baseLabor*yieldImpact;
+        const simOH=baseOH*(1+volumeChange*-0.3);
+        const simTotal=simMat+simLabor+simOH;
+        const simVolume=baseVolume*(1+volumeChange);
+        const simUnitCost=simTotal/(simVolume||1);
+        const totalCostChange=simTotal-baseTotal;
+        const pctChange=baseTotal?(simTotal-baseTotal)/baseTotal:0;
+        document.getElementById('sim-price-val').textContent=`${priceChange>=0?'+':''}${(priceChange*100).toFixed(0)}%`;
+        document.getElementById('sim-yield-val').textContent=`${yieldChange>=0?'+':''}${(yieldChange*100).toFixed(1)}%`;
+        document.getElementById('sim-volume-val').textContent=`${volumeChange>=0?'+':''}${(volumeChange*100).toFixed(0)}%`;
+        const changeColor=totalCostChange>0?'var(--danger)':'var(--success)';
+        document.getElementById('sim-summary').innerHTML=`
+            <div style="font-size:0.85rem;color:var(--text-secondary);margin-bottom:4px;">預估總成本變動 Projected Cost Change</div>
+            <div class="big-number" style="color:${changeColor}">${totalCostChange>=0?'+':''}${fmt.currency(Math.abs(totalCostChange))}</div>
+            <div class="sub-text">${fmt.pct(Math.abs(pctChange))} ${totalCostChange>=0?'增加':'減少'} | 單位成本: ${fmt.currency(baseUnitCost)} → ${fmt.currency(simUnitCost)}</div>`;
+        const months=[...new Set(pros.map(p=>p.month))].sort();
+        const baseByMonth=months.map(m=>{const mp=pros.filter(p=>p.month===m);const vol=mp.reduce((s,p)=>s+p.goodOutput,0);const cost=mp.reduce((s,p)=>s+(p.actMaterialCost+p.actLaborCost+p.actOverheadCost)*p.goodOutput,0);return vol?+(cost/vol).toFixed(2):0;});
+        const simByMonth=baseByMonth.map(v=>+(v*(1+pctChange)).toFixed(2));
+        destroyChart('chart-sim-cost');
+        const ctx1=document.getElementById('chart-sim-cost');
+        if(ctx1){window.mfgCharts['chart-sim-cost']=new Chart(ctx1,{type:'line',data:{labels:months,datasets:[
+            {label:'基準 Baseline',data:baseByMonth,borderColor:'#3b82f6',backgroundColor:'rgba(59,130,246,0.1)',fill:true,tension:0.4},
+            {label:'模擬 Simulated',data:simByMonth,borderColor:'#ef4444',backgroundColor:'rgba(239,68,68,0.1)',fill:true,tension:0.4,borderDash:[5,5]}
+        ]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'top'},datalabels:{display:false}},scales:{y:{grid:{color:'var(--chart-grid)'}},x:{grid:{display:false}}}}});}
+        destroyChart('chart-sim-structure');
+        const ctx2=document.getElementById('chart-sim-structure');
+        if(ctx2){window.mfgCharts['chart-sim-structure']=new Chart(ctx2,{type:'bar',data:{labels:['基準','模擬'],datasets:[
+            {label:'料 Material',data:[baseMat/baseTotal*100,simMat/simTotal*100],backgroundColor:'#3b82f6',borderRadius:4},
+            {label:'工 Labor',data:[baseLabor/baseTotal*100,simLabor/simTotal*100],backgroundColor:'#10b981',borderRadius:4},
+            {label:'費 Overhead',data:[baseOH/baseTotal*100,simOH/simTotal*100],backgroundColor:'#f59e0b',borderRadius:4}
+        ]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'top'},datalabels:{display:false}},scales:{y:{stacked:true,max:100,grid:{color:'var(--chart-grid)'}},x:{stacked:true,grid:{display:false}}}}});}
+        const matD=simMat-baseMat,labD=simLabor-baseLabor,ohD=simOH-baseOH;
+        initWaterfallChart('chart-sim-waterfall',['基準成本','原料變動','人工變動','費用變動','模擬成本'],[baseTotal,matD,labD,ohD,simTotal]);
+    };
+    renderMap['tab-whatif'] = () => { renderSimulator(); };
+    ['sim-price','sim-yield','sim-volume'].forEach(id=>{document.getElementById(id).addEventListener('input',()=>{const ap=document.querySelector('.tab-pane.active');if(ap&&ap.id==='tab-whatif')renderSimulator();});});
+
+    // ===== Page 20: 管理駕駛艙 =====
+    renderMap['tab-exec-cockpit'] = () => {
+        const d=currentData;
+        const pros=filterByDate(d.productionOrders);
+        const pos=filterByDate(d.purchaseOrders);
+        const staleRatio=d.materials.filter(m=>m.daysInStock>90).length/d.materials.length;
+        const avgDelivery=d.suppliers.reduce((s,sup)=>s+sup.onTimeDeliveryRate,0)/d.suppliers.length;
+        const totalVar=pros.reduce((s,p)=>s+Math.abs(p.materialVar+p.laborVar+p.overheadVar),0);
+        const totalStd=pros.reduce((s,p)=>s+p.stdTotalCost,0);
+        const costVarRate=totalStd?totalVar/totalStd:0;
+        const avgYield=pros.length?pros.reduce((s,p)=>s+p.yieldRate,0)/pros.length:0;
+        const totalInv=d.materials.reduce((s,m)=>s+m.stockQty*m.unitCost,0);
+        const monthlyUsage=d.materials.reduce((s,m)=>s+m.monthlyUsage*m.unitCost,0);
+        const turnoverRate=monthlyUsage?(monthlyUsage*12/totalInv):0;
+        const cashEfficiency=1-(d.cashFlow?d.cashFlow.capitalTiedRate:0.32);
+        const gauges=[
+            {id:'g1',label:'營運健康度',subtitle:'Overall Health',value:Math.round(((1-staleRatio)*100*0.3+avgDelivery*100*0.3+(1-costVarRate)*100*0.2+avgYield*100*0.2)),color:'#3b82f6',sparkData:[72,75,78,74,80,82]},
+            {id:'g2',label:'庫存週轉效率',subtitle:'Inventory Turnover',value:Math.min(100,Math.round(turnoverRate/12*100)),color:'#8b5cf6',sparkData:[55,58,60,62,58,65]},
+            {id:'g3',label:'供應商達交率',subtitle:'On-Time Delivery',value:Math.round(avgDelivery*100),color:'#10b981',sparkData:[88,90,87,92,91,93]},
+            {id:'g4',label:'成本控制率',subtitle:'Cost Control',value:Math.round((1-costVarRate)*100),color:'#f59e0b',sparkData:[92,90,94,91,95,93]},
+            {id:'g5',label:'品質良率',subtitle:'Quality Yield',value:Math.round(avgYield*100),color:'#0ea5e9',sparkData:[95,96,95,97,96,97]},
+            {id:'g6',label:'現金流效率',subtitle:'Cash Flow',value:Math.round(cashEfficiency*100),color:'#ec4899',sparkData:[62,65,68,66,70,68]},
+        ];
+        const greenCount=gauges.filter(g=>g.value>=85).length;
+        const yellowCount=gauges.filter(g=>g.value>=70&&g.value<85).length;
+        const redCount=gauges.filter(g=>g.value<70).length;
+        document.getElementById('cockpit-traffic').innerHTML=`<span style="font-weight:600;font-size:0.85rem;">狀態摘要</span>
+            <div class="traffic-summary-item"><span class="traffic-dot green"></span> ${greenCount} 正常</div>
+            <div class="traffic-summary-item"><span class="traffic-dot yellow"></span> ${yellowCount} 注意</div>
+            <div class="traffic-summary-item"><span class="traffic-dot red"></span> ${redCount} 警告</div>`;
+        document.getElementById('cockpit-gauges').innerHTML=gauges.map(g=>`
+            <div class="glass-panel gauge-widget"><canvas id="gauge-${g.id}" width="200" height="200"></canvas>
+            <div class="gauge-label">${g.label} <span style="font-size:0.7rem;color:var(--text-muted)">${g.subtitle}</span></div>
+            <div class="gauge-value-text" style="color:${g.value>=85?'var(--success)':g.value>=70?'var(--warning)':'var(--danger)'}">${g.value}%</div>
+            <div class="gauge-sparkline">${g.sparkData.map(v=>`<div class="spark-bar" style="height:${v*0.24}px;background:${g.color}"></div>`).join('')}</div></div>`).join('');
+        gauges.forEach(g=>{
+            destroyChart('gauge-'+g.id);
+            const ctx=document.getElementById('gauge-'+g.id);if(!ctx)return;
+            const gc=g.value>=85?'#10b981':g.value>=70?'#f59e0b':'#ef4444';
+            window.mfgCharts['gauge-'+g.id]=new Chart(ctx,{type:'doughnut',data:{datasets:[{data:[g.value,100-g.value],backgroundColor:[gc,'rgba(255,255,255,0.06)'],borderWidth:0}]},
+                options:{responsive:true,maintainAspectRatio:true,rotation:-90,circumference:180,cutout:'80%',plugins:{legend:{display:false},datalabels:{display:false},tooltip:{enabled:false}}}});
+        });
+        document.getElementById('cockpit-insights').innerHTML=[
+            {icon:'📦',title:'庫存建議',text:`目前有 ${d.materials.filter(m=>m.daysInStock>90).length} 項物料超過 90 天未動銷，建議針對專用料啟動處分流程，預估可釋放 ${fmt.currency(d.materials.filter(m=>m.daysInStock>90).reduce((s,m)=>s+m.stockQty*m.unitCost,0))} 資金。`},
+            {icon:'🚚',title:'供應商預警',text:`${d.suppliers.filter(s=>s.tier==='At-Risk').length} 家供應商處於 At-Risk 等級，建議啟動供應商輔導計畫或尋找備援來源。`},
+            {icon:'💰',title:'成本觀察',text:`本期成本差異率為 ${fmt.pct(costVarRate)}，主要來自材料價格波動。建議加強長約比例，鎖定關鍵料件價格。`},
+            {icon:'🏭',title:'良率提升',text:`整體良率 ${fmt.pct(avgYield)}，${pros.filter(p=>p.yieldRate<0.95).length} 筆工單良率低於 95%，建議優先改善製程穩定性。`},
+        ].map(ins=>`<div class="glass-panel insight-card"><div class="insight-icon">${ins.icon}</div><div class="insight-title">${ins.title}</div><div class="insight-text">${ins.text}</div></div>`).join('');
+    };
+
+    // ===== Page 21: 價值流圖 =====
+    renderMap['tab-vsm'] = () => {
+        const d=currentData;const vs=d.valueStream;if(!vs) return;
+        const totalCycle=vs.reduce((s,n)=>s+n.cycleTime,0);
+        const totalWait=vs.reduce((s,n)=>s+n.waitTime,0);
+        const totalLead=totalCycle+totalWait;
+        const valueAddTime=vs.reduce((s,n)=>s+n.cycleTime*n.valueAddRatio,0);
+        const valueAddPct=totalLead?valueAddTime/totalLead:0;
+        const wastePct=1-valueAddPct;
+        document.getElementById('vsm-kpis').innerHTML=`
+            <div class="glass-panel kpi-card"><span class="kpi-title">總前置時間 Total Lead Time</span><span class="kpi-value">${totalLead.toFixed(1)} 天</span></div>
+            <div class="glass-panel kpi-card kpi-success"><span class="kpi-title">增值時間 Value-Add</span><span class="kpi-value">${valueAddTime.toFixed(1)} 天</span></div>
+            <div class="glass-panel kpi-card kpi-danger"><span class="kpi-title">浪費比例 Waste</span><span class="kpi-value">${fmt.pct(wastePct)}</span></div>
+            <div class="glass-panel kpi-card kpi-warning"><span class="kpi-title">瓶頸站點 Bottlenecks</span><span class="kpi-value">${vs.filter(n=>n.bottleneck).length} 站</span></div>`;
+        const arrowSvg='<svg viewBox="0 0 32 20" fill="currentColor"><path d="M0 8h24l-6-6 2-2 10 10-10 10-2-2 6-6H0z"/></svg>';
+        document.getElementById('vsm-flow').innerHTML=vs.map((node,i)=>{
+            const nh=`<div class="vsm-node ${node.bottleneck?'bottleneck':''}"><div class="node-title">${node.name}</div><div class="node-metric">週期: <b>${node.cycleTime}天</b></div><div class="node-metric">等待: <b>${node.waitTime}天</b></div><div class="node-metric">增值率: <b>${(node.valueAddRatio*100).toFixed(0)}%</b></div></div>`;
+            const arrow=i<vs.length-1?`<div class="vsm-arrow animated">${arrowSvg}</div>`:'';
+            return nh+arrow;
+        }).join('');
+        const colors=['#10b981','#3b82f6','#f59e0b','#ef4444','#8b5cf6','#0ea5e9','#ec4899','#14b8a6'];
+        document.getElementById('vsm-timeline').innerHTML=`
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;"><span style="font-size:0.85rem;font-weight:600;">前置時間分解</span><span style="font-size:0.8rem;color:var(--text-secondary)">總計 ${totalLead.toFixed(1)} 天</span></div>
+            <div class="vsm-timeline-bar">${vs.map((n,i)=>`<div class="segment" style="width:${((n.cycleTime+n.waitTime)/totalLead*100).toFixed(1)}%;background:${colors[i%colors.length]}" title="${n.name}: ${(n.cycleTime+n.waitTime).toFixed(1)}天"></div>`).join('')}</div>
+            <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:8px;">${vs.map((n,i)=>`<span style="font-size:0.7rem;color:var(--text-secondary);display:flex;align-items:center;gap:4px;"><span style="width:8px;height:8px;border-radius:2px;background:${colors[i%colors.length]};display:inline-block"></span>${n.name}</span>`).join('')}</div>
+            <div class="vsm-efficiency"><div class="stat"><div class="stat-value" style="color:var(--success)">${fmt.pct(valueAddPct)}</div><div class="stat-label">增值比例</div></div><div class="stat"><div class="stat-value" style="color:var(--danger)">${fmt.pct(wastePct)}</div><div class="stat-label">浪費比例</div></div></div>`;
+        initBarChart('chart-vsm-cycle',vs.map(n=>n.name),'天數',vs.map(n=>n.cycleTime+n.waitTime),false,vs.map(n=>n.bottleneck?'#ef4444':'#3b82f6'));
+        destroyChart('chart-vsm-ratio');
+        const ctx=document.getElementById('chart-vsm-ratio');
+        if(ctx){window.mfgCharts['chart-vsm-ratio']=new Chart(ctx,{type:'bar',data:{labels:vs.map(n=>n.name),datasets:[
+            {label:'增值',data:vs.map(n=>+(n.cycleTime*n.valueAddRatio).toFixed(2)),backgroundColor:'#10b981',borderRadius:4},
+            {label:'浪費',data:vs.map(n=>+(n.cycleTime*(1-n.valueAddRatio)+n.waitTime).toFixed(2)),backgroundColor:'rgba(239,68,68,0.5)',borderRadius:4}
+        ]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'top'},datalabels:{display:false}},scales:{y:{stacked:true,grid:{color:'var(--chart-grid)'}},x:{stacked:true,grid:{display:false}}}}});}
+    };
+
+    // ===== Page 22: 標竿對比 =====
+    renderMap['tab-benchmark'] = () => {
+        const d=currentData;const bm=d.benchmark;if(!bm) return;
+        const avgGap=bm.dimensions.reduce((s,_,i)=>s+(bm.industryBest[i]-bm.company[i]),0)/bm.dimensions.length;
+        document.getElementById('benchmark-kpis').innerHTML=`
+            <div class="glass-panel kpi-card"><span class="kpi-title">平均標竿差距</span><span class="kpi-value">${avgGap.toFixed(1)} pts</span></div>
+            <div class="glass-panel kpi-card kpi-success"><span class="kpi-title">優於行業平均</span><span class="kpi-value">${bm.dimensions.filter((_,i)=>bm.company[i]>bm.industryAvg[i]).length} / ${bm.dimensions.length}</span></div>
+            <div class="glass-panel kpi-card kpi-warning"><span class="kpi-title">達標竿水準</span><span class="kpi-value">${bm.dimensions.filter((_,i)=>bm.company[i]>=bm.industryBest[i]).length} / ${bm.dimensions.length}</span></div>
+            <div class="glass-panel kpi-card kpi-purple"><span class="kpi-title">最大差距維度</span><span class="kpi-value">${bm.dimensions[bm.dimensions.reduce((mi,_,i)=>(bm.industryBest[i]-bm.company[i])>(bm.industryBest[mi]-bm.company[mi])?i:mi,0)]}</span></div>`;
+        destroyChart('chart-bench-radar');
+        const ctx=document.getElementById('chart-bench-radar');
+        if(ctx){window.mfgCharts['chart-bench-radar']=new Chart(ctx,{type:'radar',
+            data:{labels:bm.dimensions,datasets:[
+                {label:'公司 Company',data:bm.company,borderColor:'#3b82f6',backgroundColor:'rgba(59,130,246,0.15)',pointBackgroundColor:'#3b82f6',borderWidth:2},
+                {label:'行業平均',data:bm.industryAvg,borderColor:'#f59e0b',backgroundColor:'rgba(245,158,11,0.08)',pointBackgroundColor:'#f59e0b',borderWidth:2,borderDash:[5,5]},
+                {label:'行業標竿',data:bm.industryBest,borderColor:'#10b981',backgroundColor:'rgba(16,185,129,0.08)',pointBackgroundColor:'#10b981',borderWidth:2}
+            ]},options:{responsive:true,maintainAspectRatio:false,scales:{r:{beginAtZero:true,max:100,grid:{color:'rgba(255,255,255,0.08)'},angleLines:{color:'rgba(255,255,255,0.08)'}}},plugins:{legend:{position:'bottom'},datalabels:{display:false}}}});}
+        destroyChart('chart-bench-gap');
+        const ctx2=document.getElementById('chart-bench-gap');
+        if(ctx2){const gaps=bm.dimensions.map((_,i)=>bm.industryBest[i]-bm.company[i]);
+            window.mfgCharts['chart-bench-gap']=new Chart(ctx2,{type:'bar',
+                data:{labels:bm.dimensions,datasets:[{label:'公司',data:bm.company,backgroundColor:'#3b82f6',borderRadius:4},{label:'差距到標竿',data:gaps,backgroundColor:'rgba(239,68,68,0.5)',borderRadius:4}]},
+                options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'top'},datalabels:{display:false}},scales:{x:{stacked:true,grid:{color:'var(--chart-grid)'}},y:{stacked:true,grid:{display:false}}}}});}
+        const roadmap=bm.dimensions.map((_,i)=>({dimension:bm.dimensions[i],current:bm.company[i],target:bm.industryBest[i],gap:bm.industryBest[i]-bm.company[i],
+            priority:bm.industryBest[i]-bm.company[i]>15?'高':bm.industryBest[i]-bm.company[i]>8?'中':'低',
+            action:['提高庫存週轉，減少呆滯庫存','強化供應商考核，導入備援供應商','優化製程參數，降低不良率','議價與替代料件評估','分散採購來源，降低集中度'][i]
+        })).sort((a,b)=>b.gap-a.gap);
+        document.getElementById('table-bench-roadmap').innerHTML=`<table><thead><tr><th>維度</th><th>現況</th><th>標竿</th><th>差距</th><th>優先級</th><th>改善方向</th></tr></thead><tbody>${roadmap.map(r=>`<tr><td>${r.dimension}</td><td>${r.current}</td><td>${r.target}</td><td>${r.gap}</td><td><span class="status-badge ${r.priority==='高'?'badge-danger':r.priority==='中'?'badge-warning':'badge-success'}">${r.priority}</span></td><td style="font-size:0.75rem">${r.action}</td></tr>`).join('')}</tbody></table>`;
+    };
+
+    // ===== 初始化 =====
+    currentData = generateSampleDataV3();
+    initDateFilter();
+    renderMap['tab-overview']();  // 只渲染首頁
+</script>
+</body>
+</html>

@@ -1,0 +1,210 @@
+/**
+ * inventory.css - 庫存分析頁面樣式
+ *
+ * V4 新功能：
+ * - 庫存週轉率追蹤
+ * - 庫存分佈（按類別/倉庫）
+ * - 呆滯庫存預警
+ */
+
+/* ============================
+   頁面容器
+   ============================ */
+.inventory-page {
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+/* ============================
+   頁面標題
+   ============================ */
+.page-header {
+  margin-bottom: 8px;
+}
+
+/* ============================
+   KPI 網格
+   ============================ */
+.kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 20px;
+}
+
+@media (max-width: 1200px) {
+  .kpi-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 768px) {
+  .kpi-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* KPI 卡片 */
+.kpi-card {
+  display: flex;
+  flex-direction: column;
+  padding: 20px;
+  gap: 8px;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.kpi-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+}
+
+.kpi-label {
+  font-size: 13px;
+  color: var(--text-secondary);
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.kpi-value {
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--text-primary);
+  line-height: 1.2;
+}
+
+/* ============================
+   主內容網格
+   ============================ */
+.main-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+}
+
+@media (max-width: 1200px) {
+  .main-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ============================
+   圖表面板
+   ============================ */
+.chart-panel {
+  padding: 20px;
+}
+
+.chart-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.chart-container {
+  width: 100%;
+}
+
+/* ============================
+   資料表格
+   ============================ */
+.data-table {
+  overflow-x: auto;
+  margin-top: 16px;
+}
+
+.data-table table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.data-table th {
+  background: var(--surface-raised);
+  padding: 12px 16px;
+  text-align: left;
+  font-weight: 600;
+  color: var(--text-secondary);
+  border-bottom: 1px solid var(--glass-border);
+  white-space: nowrap;
+}
+
+.data-table td {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--glass-border);
+  color: var(--text-primary);
+}
+
+.data-table tr:hover td {
+  background: var(--surface-hover);
+}
+
+.data-table tr:last-child td {
+  border-bottom: none;
+}
+
+/* ============================
+   狀態徽章
+   ============================ */
+.status-badge {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+/* ============================
+   載入中狀態
+   ============================ */
+.loading-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100vh;
+  gap: 16px;
+  color: var(--text-secondary);
+}
+
+.spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid var(--glass-border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ============================
+   錯誤邊界
+   ============================ */
+.error-boundary {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100vh;
+  gap: 16px;
+  color: var(--text-primary);
+  text-align: center;
+  padding: 24px;
+}
+
+.error-boundary h2 {
+  color: var(--danger);
+  margin: 0;
+}
+
+.error-boundary p {
+  color: var(--text-secondary);
+  margin: 0;
+}

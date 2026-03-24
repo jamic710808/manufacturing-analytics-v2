@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>制作業分析儀表板 V4</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='4' fill='%230f172a'/%3E%3Cpath d='M8 12h16M8 16h12M8 20h8' stroke='%2338bdf8' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E" />
+
+  <!-- SystemJS for micro-frontend loading -->
+  <script src="https://cdn.jsdelivr.net/npm/systemjs@6.14.3/dist/s.min.js"></script>
+
+  <!-- Import map for micro-frontends -->
+  <!-- Dev: uses localhost:9001-9004 (Vite dev servers) -->
+  <!-- Prod: uses relative paths from packages/*/dist/spa.js -->
+  <script type="systemjs-importmap">
+  {
+    "imports": {
+      "@mfg-dashboard/page-overview": "/packages/page-overview/dist/spa.js",
+      "@mfg-dashboard/page-inventory": "/packages/page-inventory/dist/spa.js",
+      "@mfg-dashboard/page-procurement": "/packages/page-procurement/dist/spa.js",
+      "@mfg-dashboard/page-supplier": "/packages/page-supplier/dist/spa.js"
+    }
+  }
+  </script>
+
+  <!-- Fallback: Manually configure SystemJS paths for legacy support -->
+  <script>
+    (function() {
+      var retries = 0;
+      function configureSystem() {
+        retries++;
+        if (window.System && window.System.config) {
+          window.System.config({
+            paths: {
+              '@mfg-dashboard/page-overview': '/packages/page-overview/dist/spa.js',
+              '@mfg-dashboard/page-inventory': '/packages/page-inventory/dist/spa.js',
+              '@mfg-dashboard/page-procurement': '/packages/page-procurement/dist/spa.js',
+              '@mfg-dashboard/page-supplier': '/packages/page-supplier/dist/spa.js'
+            }
+          });
+        } else if (retries < 50) {
+          setTimeout(configureSystem, 50);
+        }
+      }
+      configureSystem();
+    })();
+  </script>
+  <script type="module" crossorigin src="/assets/index-C6ARx8Pd.js"></script>
+  <link rel="stylesheet" crossorigin href="/assets/index-DVPUlWTr.css">
+</head>
+<body>
+  <div id="root"></div>
+</body>
+</html>

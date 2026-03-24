@@ -1,0 +1,124 @@
+/**
+ * production.css - 生產與品質分析頁面樣式
+ *
+ * V4 新功能：
+ * - OEE 設備效率儀表板
+ * - 生產數據與良率分析
+ */
+
+/* ============================
+   頁面容器
+   ============================ */
+.production-page {
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+/* ============================
+   頁面標題
+   ============================ */
+.page-header {
+  margin-bottom: 8px;
+}
+
+/* ============================
+   KPI 網格
+   ============================ */
+.kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 20px;
+}
+
+@media (max-width: 1200px) {
+  .kpi-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 768px) {
+  .kpi-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ============================
+   主內容網格
+   ============================ */
+.main-grid {
+  display: grid;
+  grid-template-columns: 1.5fr 1fr;
+  gap: 24px;
+}
+
+@media (max-width: 1200px) {
+  .main-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ============================
+   圖表面板
+   ============================ */
+.chart-panel {
+  padding: 20px;
+}
+
+.chart-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+/* ============================
+   載入中狀態
+   ============================ */
+.loading-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100vh;
+  gap: 16px;
+  color: var(--text-secondary);
+}
+
+/* ============================
+   錯誤邊界
+   ============================ */
+.error-boundary {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100vh;
+  gap: 16px;
+  color: var(--text-primary);
+  text-align: center;
+  padding: 24px;
+}
+
+.error-boundary h2 {
+  color: var(--danger);
+  margin: 0;
+}
+
+.error-boundary p {
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+/* ============================
+   狀態徽章
+   ============================ */
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 600;
+}
