@@ -14,6 +14,8 @@ const ProductionPage = lazy(() => import('./pages/production/ProductionPage'));
 const CostPage = lazy(() => import('./pages/cost/CostPage'));
 const AIPage = lazy(() => import('./pages/ai/AIPage'));
 const SimulationPage = lazy(() => import('./pages/simulation/SimulationPage'));
+const DashboardPage = lazy(() => import('./pages/dashboard/DashboardPage'));
+const ReportsPage = lazy(() => import('./pages/reports/ReportsPage'));
 const KBPage = lazy(() => import('./pages/kb/KBPage'));
 
 const PageLoader: React.FC = () => (
@@ -41,6 +43,8 @@ const App: React.FC = () => (
         <Route path="/cost/*" element={<CostPage />} />
         <Route path="/ai/*" element={<AIPage />} />
         <Route path="/simulation/*" element={<SimulationPage />} />
+        <Route path="/dashboard/*" element={<DashboardPage />} />
+        <Route path="/reports/*" element={<ReportsPage />} />
         <Route path="/kb/dax" element={<KBPage />} />
 
         {/* 尚未實作的頁面 */}

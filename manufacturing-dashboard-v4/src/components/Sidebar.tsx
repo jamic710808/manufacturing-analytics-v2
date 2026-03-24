@@ -85,23 +85,21 @@ const navigationGroups: NavGroup[] = [
     group: '情境模擬',
     items: [
       { id: 'sim-whatif', label: '情境模擬器', icon: '🔮', path: '/simulation/whatif' },
-      { id: 'sim-vsm', label: '價值流分析', icon: '📉', path: '/simulation/vsm' },
+      { id: 'sim-value', label: '價值流分析', icon: '📉', path: '/simulation/value' },
     ],
   },
   {
     group: '駕駛艙與標竿',
     items: [
-      { id: 'cockpit-iron', label: '核心三角儀表', icon: '🔺', path: '/cockpit/iron' },
-      { id: 'cockpit-benchmark', label: '標竿對比', icon: '🎯', path: '/cockpit/benchmark' },
-      { id: 'cockpit-cashflow', label: '資金佔用分析', icon: '💵', path: '/cockpit/cashflow' },
+      { id: 'dashboard-cockpit', label: '駕駛艙', icon: '🚀', path: '/dashboard/cockpit' },
+      { id: 'dashboard-benchmark', label: '標竿管理', icon: '📊', path: '/dashboard/benchmark' },
     ],
   },
   {
     group: '報告與設定',
     items: [
-      { id: 'report-generator', label: '報告生成器', icon: '📄', path: '/report/generator' },
-      { id: 'report-task', label: '異常任務與討論', icon: '💬', path: '/report/task' },
-      { id: 'report-settings', label: '系統設定', icon: '⚙️', path: '/report/settings' },
+      { id: 'reports-generator', label: '報告生成', icon: '📋', path: '/reports/generator' },
+      { id: 'reports-settings', label: '系統設定', icon: '⚙️', path: '/reports/settings' },
     ],
   },
   {
