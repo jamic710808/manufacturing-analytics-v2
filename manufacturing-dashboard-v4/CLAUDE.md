@@ -4,128 +4,127 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ---
 
-## 專案架構：Single-SPA 微前端
+## 專案資訊
 
-本專案採用 **Single-SPA 微前端架構**，由一個 Shell 與多個獨立的 Page 微前端組成。
+**專案名稱**：製造業分析儀表板 V4
+**當前版本**：V4.1
+**最後更新**：2026-03-25
+**GitHub**：https://github.com/jamic710808/manufacturing-analytics-v2
 
-### 套件結構
+---
+
+## 記憶提示（ Memory Hints ）
+
+### 重要歷史紀錄
+
+| 日期 | 版本 | 事件 |
+|------|------|------|
+| 2026-03-23 | V4.0 | 完成所有頁面開發（React + Vite 架構） |
+| 2026-03-24 | V4.1 | 新增駕駛艙、標竿管理、報告生成器、系統設定、價值流分析 |
+| 2026-03-25 | - | 修復 Sidebar emoji 雙重顯示、推送至 GitHub、建立 vercel.json |
+
+### 已完成的 V4.1 功能
+
+- **駕駛艙**（`/dashboard/cockpit`）— 6 KPI 卡片、產能趨勢、即時告警
+- **標竿管理**（`/dashboard/benchmark`）— 四層級對比柱狀圖
+- **報告生成器**（`/reports/generator`）— 6 種報告類型、日期設定、格式選擇
+- **系統設定**（`/reports/settings`）— 自動重新整理、貨幣、主題、語言
+- **價值流分析**（`/simulation/value`）— 6 階段流程、瓶頸識別
+
+### 已修復的 Bug
+
+1. `DashboardPage.tsx:134` — `}}}` 語法錯誤（已修正為 `}}`）
+2. `Sidebar.tsx` — emoji 雙重顯示（已移除 label 中的 emoji，僅保留 icon 欄位）
+
+---
+
+## 專案架構
+
+**技術棧**：React 18 + TypeScript 5 + Vite 5 + React Router v6
 
 ```
 manufacturing-dashboard-v4/
-├── packages/
-│   ├── shell/              # 主 Shell（port 9000+）
-│   │   └── src/
-│   │       ├── index.tsx   # Single-SPA 入口
-│   │       ├── App.tsx     # Shell 主元件
-│   │       └── components/
-│   │           └── Sidebar.tsx  # 側邊導覽列（36 個路由）
-│   ├── page-overview/       # 工廠總覽頁（port 9001）
-│   ├── page-inventory/      # 庫存分析頁（port 9002）
-│   ├── page-procurement/    # 採購分析頁（port 9003）
-│   └── page-supplier/       # 供應商分析頁（port 9004）
+├── src/
+│   ├── App.tsx              # 路由設定（lazy loading）
+│   ├── main.tsx             # 入口
+│   ├── components/
+│   │   └── Sidebar.tsx     # 側邊導覽列（11 個群組、36 個路由）
+│   └── pages/
+│       ├── dashboard/
+│       │   └── DashboardPage.tsx   # 駕駛艙 + 標竿管理
+│       ├── reports/
+│       │   └── ReportsPage.tsx      # 報告生成 + 系統設定
+│       ├── simulation/
+│       │   └── SimulationPage.tsx   # 價值流分析 + What-If
+│       └── kb/
+│           └── KBPage.tsx          # DAX 知識庫
+├── vercel.json               # Vercel 部署設定
+├── index.html
+└── package.json
 ```
-
-### 已實作的頁面（4 個）
-
-| 套件 | 路由 | 功能 |
-|------|------|------|
-| `page-overview` | `/overview` | KPI 卡片、OEE 趨勢圖、異常警訊、工廠健康度 |
-| `page-inventory` | `/inventory` | 庫存分佈圖、呆滯庫存表格 |
-| `page-procurement` | `/procurement` | 採購趨勢圖、供應商表現 |
-| `page-supplier` | `/supplier` | 供應商評分卡、風險評估 |
-
-### 尚未實作的路由（32 個）
-
-Sidebar.tsx 定義了 36 個路由，但僅實作上述 4 個。其餘路由點擊後無內容。
 
 ---
 
 ## 常用指令
 
-### 啟動開發環境
-
 ```bash
 cd C:\Users\jamic\製造業分析\manufacturing-dashboard-v4
 
-# 安裝依賴
-npm install
-
-# 啟動所有微前端（各自運行在不同 port）
+# 啟動開發環境（port 3002）
 npm run dev
-```
 
-### 個別啟動微前端
-
-```bash
-# Shell（port 9000+）
-cd packages/shell && npm run dev
-
-# 各 Page 微前端
-cd packages/page-overview && npm run dev   # port 9001
-cd packages/page-inventory && npm run dev  # port 9002
-cd packages/page-procurement && npm run dev # port 9003
-cd packages/page-supplier && npm run dev  # port 9004
-```
-
-### 建置生產版本
-
-```bash
+# 建置生產版本
 npm run build
+
+# 型別檢查
+npm run lint
 ```
 
 ---
 
-## 重要技術細節
+## 部署
 
-### React 版本相容性
+### GitHub 推送
+```bash
+git add . && git commit -m "訊息" && git push origin main
+```
 
-**關鍵規則**：所有 entry point（`src/index.tsx`）必須使用 React 17 的 API：
+### Vercel 部署
+1. 前往 [vercel.com](https://vercel.com) → Add New Project → 選擇此倉庫
+2. 或使用 CLI：`npx vercel --prod`
 
+**注意**：大型 PDF 檔案（>50MB）會觸發 GitHub LFS 警告，但推送仍會成功。
+
+---
+
+## 開發注意事項
+
+### React Router 子路由模式
+
+使用 `useLocation()` + 正規表達式匹配：
 ```tsx
-// ✅ 正確
-import ReactDOM from 'react-dom';
-
-// ❌ 錯誤（會導致 ReactDOM.render is not a function）
-import ReactDOM from 'react-dom/client';
+const match = location.pathname.match(/^\/dashboard\/?(.*)$/);
+const subRoute = match ? (match[1] || 'cockpit') : 'cockpit';
 ```
 
-**原因**：`single-spa-react` v4.6.1 內部呼叫 `ReactDOM.render()`（React 17 API），與 React 18 的 `createRoot` API 不相容。
+### Glass-morphism UI 樣式
 
-受影響的檔案：
-- `packages/page-overview/src/index.tsx`
-- `packages/page-inventory/src/index.tsx`
-- `packages/page-procurement/src/index.tsx`
-- `packages/page-supplier/src/index.tsx`
+統一的 `.glass-panel` 樣式系統，使用 CSS 變數：
+- `var(--glass-bg)` — 玻璃背景
+- `var(--glass-border)` — 邊框
+- `var(--accent)` — 主色調
+- `var(--text-primary)` / `var(--text-secondary)` — 文字顏色
 
-### Vite Dev 模式行為
+### Sidebar 導航群組
 
-Vite 在 dev 模式下會將所有依賴 bundling 到記憶體中（約 9.6 MB），而非磁碟。這是**正常行為**，不是錯誤。
-
-驗證頁面是否正確執行，應使用瀏覽器 snapshot 或 DevTools，而非檢查磁碟檔案大小。
+共 11 個群組，emoji 應只出現在 `icon` 欄位，`label` 僅放中文名稱。
 
 ---
 
-## 已知 Bug
+## 文件
 
-### 已修復
-
-1. **Duplicate key "name"**（InventoryPage.tsx:66）
-   - 陣列中物件有重複的 `name` 屬性
-   - 已移除重複項目
-
-2. **ReactDOM.render is not a function**
-   - 所有 entry point 已改用 `import ReactDOM from 'react-dom'`
-
-### 尚未修復
-
-- 其餘 32 個路由無實際內容（需實作對應的 Page 微前端）
-
----
-
-## 添加新頁面的步驟
-
-1. 在 `packages/` 下建立新套件（如 `page-xxx`）
-2. 使用 `single-spa-react` 設定 entry point
-3. 實作頁面元件（如 `XxxPage.tsx`）
-4. 在 `Sidebar.tsx` 中新增路由定義
-5. 在 workspace 的 `package.json` 中加入 `xxx` 到 `packages` 陣列
+| 檔案 | 說明 |
+|------|------|
+| `修改紀錄_V4.md` | 版本變更歷程 |
+| `使用說明書_報告與設定.md` | 報告生成器與系統設定操作手冊 |
+| `檢討報告_V4.md` | V4 開發過程技術檢討 |
