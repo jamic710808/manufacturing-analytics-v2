@@ -2,6 +2,7 @@ import React, { Suspense, lazy } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import MainLayout from './layouts/MainLayout';
 import NotImplemented from './pages/NotImplemented';
+import { DataProvider } from './data/DataContext';
 
 /* 已實作的頁面（懶載入，加快首屏速度） */
 const OverviewPage = lazy(() => import('./pages/overview/OverviewPage'));
@@ -26,6 +27,7 @@ const PageLoader: React.FC = () => (
 );
 
 const App: React.FC = () => (
+  <DataProvider>
   <MainLayout>
     <Suspense fallback={<PageLoader />}>
       <Routes>
@@ -52,6 +54,7 @@ const App: React.FC = () => (
       </Routes>
     </Suspense>
   </MainLayout>
+  </DataProvider>
 );
 
 export default App;

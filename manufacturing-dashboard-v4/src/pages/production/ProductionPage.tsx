@@ -9,6 +9,7 @@
 import React, { useState, useEffect } from 'react';
 import ReactECharts from 'echarts-for-react';
 import { useLocation } from 'react-router-dom';
+import { useData } from '../../data/DataContext';
 
 /** 從 React Router location 取得生產子頁面 */
 const useProductionSubRoute = (): string => {
@@ -49,6 +50,7 @@ interface ProductionSummary {
 
 const ProductionPage: React.FC = () => {
   const subRoute = useProductionSubRoute();
+  const { data: ctxData } = useData();
   const [summary, setSummary] = useState<ProductionSummary>({
     overallOEE: 0,
     avgYield: 0,
@@ -61,33 +63,19 @@ const ProductionPage: React.FC = () => {
   const [trendData, setTrendData] = useState<{ name: string; oee: number; yield: number }[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // 模擬 API 載入
+  // 從 Context 載入資料
   useEffect(() => {
+    const prod = ctxData.production;
     setTimeout(() => {
       setSummary({
-        overallOEE: 87.3,
-        avgYield: 96.2,
-        totalOutput: 1256800,
-        defectRate: 1.8,
-        criticalEquipment: 2,
+        overallOEE: prod.overallOEE,
+        avgYield: prod.avgYield,
+        totalOutput: prod.totalOutput,
+        defectRate: prod.defectRate,
+        criticalEquipment: prod.oeeData.filter(e => e.status === 'critical').length,
       });
-
-      setOeeData([
-        { id: '1', equipmentName: '射出成型機 #1', availability: 92.5, performance: 95.2, quality: 98.1, oee: 86.4, status: 'good' },
-        { id: '2', equipmentName: '射出成型機 #2', availability: 88.3, performance: 91.5, quality: 97.8, oee: 79.0, status: 'warning' },
-        { id: '3', equipmentName: 'CNC 加工中心 #1', availability: 95.1, performance: 94.3, quality: 99.2, oee: 88.9, status: 'excellent' },
-        { id: '4', equipmentName: 'CNC 加工中心 #2', availability: 78.2, performance: 89.1, quality: 96.5, oee: 67.3, status: 'critical' },
-        { id: '5', equipmentName: '包裝線 #1', availability: 94.8, performance: 97.2, quality: 99.5, oee: 91.6, status: 'excellent' },
-        { id: '6', equipmentName: '自動組裝線 #1', availability: 91.5, performance: 93.8, quality: 98.7, oee: 84.6, status: 'good' },
-      ]);
-
-      setYieldData([
-        { id: '1', productName: '產品 A - 外殼件', targetYield: 98, actualYield: 97.8, output: 45000, defectRate: 2.2 },
-        { id: '2', productName: '產品 B - 機構件', targetYield: 97, actualYield: 96.5, output: 32000, defectRate: 3.5 },
-        { id: '3', productName: '產品 C - 電子件', targetYield: 99, actualYield: 99.2, output: 28000, defectRate: 0.8 },
-        { id: '4', productName: '產品 D - 包裝材', targetYield: 99.5, actualYield: 99.1, output: 85000, defectRate: 0.9 },
-        { id: '5', productName: '產品 E - 組裝件', targetYield: 96, actualYield: 94.8, output: 18000, defectRate: 5.2 },
-      ]);
+      setOeeData(prod.oeeData);
+      setYieldData(prod.yieldData);
 
       setTrendData([
         { name: '1月', oee: 82.5, yield: 94.8 },
@@ -95,12 +83,12 @@ const ProductionPage: React.FC = () => {
         { name: '3月', oee: 83.8, yield: 95.0 },
         { name: '4月', oee: 85.6, yield: 95.8 },
         { name: '5月', oee: 86.9, yield: 96.1 },
-        { name: '6月', oee: 87.3, yield: 96.2 },
+        { name: '6月', oee: prod.overallOEE, yield: prod.avgYield },
       ]);
 
       setLoading(false);
-    }, 800);
-  }, []);
+    }, 400);
+  }, [ctxData.production]);
 
   /** 取得 OEE 狀態顏色 */
   const getStatusColor = (status: OEEData['status']) => {

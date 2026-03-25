@@ -1,6 +1,7 @@
 import React from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import ReactECharts from 'echarts-for-react';
+import { useData } from '../../data/DataContext';
 
 const useCostSubRoute = () => {
   const location = useLocation();
@@ -22,6 +23,8 @@ const cStyles: Record<string, React.CSSProperties> = {
    子頁 1：BOM 成本結構
    ================================================================ */
 const BomPage: React.FC = () => {
+  const { data: ctxData } = useData();
+  const costData = ctxData.cost;
   const sunburstOption = {
     tooltip: { trigger: 'item' },
     series: [{
@@ -71,10 +74,10 @@ const BomPage: React.FC = () => {
       </div>
       <div className="kpi-grid">
         {[
-          { label: '標準成本（每件）', value: '11,000', unit: 'NTD', color: 'var(--text-primary)' },
-          { label: '直接材料佔比', value: '76.4%', unit: '', color: 'var(--accent)' },
-          { label: '直接人工佔比', value: '13.6%', unit: '', color: 'var(--info)' },
-          { label: '製造費用佔比', value: '10.0%', unit: '', color: 'var(--purple)' },
+          { label: '標準成本（每件）', value: costData.standardCost.toLocaleString(), unit: 'NTD', color: 'var(--text-primary)' },
+          { label: '直接材料佔比', value: `${costData.materialRatio}%`, unit: '', color: 'var(--accent)' },
+          { label: '直接人工佔比', value: `${costData.laborRatio}%`, unit: '', color: 'var(--info)' },
+          { label: '製造費用佔比', value: `${costData.overheadRatio}%`, unit: '', color: 'var(--purple)' },
         ].map(k => (
           <div key={k.label} className="glass-panel kpi-card">
             <span className="kpi-label">{k.label}</span>
@@ -114,25 +117,16 @@ const BomPage: React.FC = () => {
               <tr><th>層級</th><th>料號</th><th>品名規格</th><th>用量</th><th>單位成本</th><th>合計成本</th><th>佔比</th><th>成本類別</th></tr>
             </thead>
             <tbody>
-              {[
-                { level: 'L1', code: 'M-0021', name: '電阻 470Ω', qty: '8 pcs', unit: 0.72, total: 5.76, pct: 0.05, cat: '直接材料' },
-                { level: 'L1', code: 'M-PCB-01', name: 'PCB 主板 V3', qty: '1 片', unit: 1800, total: 1800, pct: 16.4, cat: '直接材料' },
-                { level: 'L1', code: 'M-IC-08', name: '主控 IC', qty: '1 顆', unit: 3200, total: 3200, pct: 29.1, cat: '直接材料' },
-                { level: 'L1', code: 'M-MOSFET', name: 'MOSFET 模組', qty: '2 顆', unit: 450, total: 900, pct: 8.2, cat: '直接材料' },
-                { level: 'L2', code: 'LH-001', name: '生產作業工時', qty: '0.5 hr', unit: 2400, total: 1200, pct: 10.9, cat: '直接人工' },
-                { level: 'L2', code: 'LH-002', name: '品質檢驗工時', qty: '0.125 hr', unit: 2400, total: 300, pct: 2.7, cat: '直接人工' },
-                { level: 'L3', code: 'OH-001', name: '設備折舊攤提', qty: '1 件', unit: 800, total: 800, pct: 7.3, cat: '製造費用' },
-                { level: 'L3', code: 'OH-002', name: '廠房租金攤提', qty: '1 件', unit: 400, total: 400, pct: 3.6, cat: '製造費用' },
-              ].map((row, i) => (
+              {costData.bomItems.map((row, i) => (
                 <tr key={i}>
                   <td style={{ fontFamily: 'monospace', fontSize: 11, color: 'var(--text-muted)' }}>{row.level}</td>
                   <td>{row.code}</td>
                   <td>{row.name}</td>
                   <td>{row.qty}</td>
-                  <td>${row.unit.toLocaleString()}</td>
-                  <td style={{ fontWeight: 600 }}>${row.total.toLocaleString()}</td>
-                  <td style={{ color: 'var(--accent)' }}>{row.pct}%</td>
-                  <td><span className={`badge ${row.cat === '直接材料' ? 'badge-info' : row.cat === '直接人工' ? 'badge-success' : 'badge-warning'}`}>{row.cat}</span></td>
+                  <td>${row.unitCost.toLocaleString()}</td>
+                  <td style={{ fontWeight: 600 }}>${row.totalCost.toLocaleString()}</td>
+                  <td style={{ color: 'var(--accent)' }}>{row.percentage}%</td>
+                  <td><span className={`badge ${row.category === '直接材料' ? 'badge-info' : row.category === '直接人工' ? 'badge-success' : 'badge-warning'}`}>{row.category}</span></td>
                 </tr>
               ))}
             </tbody>

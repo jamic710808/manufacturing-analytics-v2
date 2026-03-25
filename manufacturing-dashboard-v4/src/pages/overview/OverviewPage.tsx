@@ -8,6 +8,7 @@
  */
 import React, { useState, useEffect, useCallback } from 'react';
 import ReactECharts from 'echarts-for-react';
+import { useData } from '../../data/DataContext';
 
 /** KPI 指標類型 */
 interface KPI {
@@ -36,44 +37,22 @@ interface ChartData {
 }
 
 const OverviewPage: React.FC = () => {
+  const { data } = useData();
   // 狀態管理
   const [kpis, setKpis] = useState<KPI[]>([]);
   const [alerts, setAlerts] = useState<Alert[]>([]);
   const [trendData, setTrendData] = useState<ChartData[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // 載入資料
+  // 從 Context 載入資料
   useEffect(() => {
-    // 模擬 API 載入
     setTimeout(() => {
-      setKpis([
-        { id: 'oee', label: 'OEE', value: 87.3, unit: '%', trend: 2.5, trendLabel: '較上月' },
-        { id: 'quality', label: '品質達成率', value: 96.2, unit: '%', trend: 0.8, trendLabel: '較上月' },
-        { id: 'otd', label: 'OTD 達成率', value: 78.5, unit: '%', trend: -3.2, trendLabel: '較上月' },
-        { id: 'inventory', label: '庫存週轉率', value: 8.4, unit: '次', trend: 1.1, trendLabel: '較上月' },
-      ]);
-
-      setAlerts([
-        { id: '1', level: 'P1', title: '供應商交期延誤', description: '供應商 A-1234 原料短缺', time: '10分鐘前', location: '原料倉庫' },
-        { id: '2', level: 'P2', title: '良率異常下降', description: 'SMT 線良率降至 94.2%', time: '35分鐘前', location: 'SMT-01' },
-        { id: '3', level: 'P2', title: '設備維護提醒', description: '沖壓機 P-203 需要保養', time: '1小時前', location: '沖壓車間' },
-        { id: '4', level: 'P3', title: '庫存水位警告', description: '物料 M-5678 低於安全庫存', time: '2小時前', location: '半成品倉' },
-        { id: '5', level: 'P3', title: '訂單逾期風險', description: '訂單 PO-2024-0892 可能延誤', time: '3小時前', location: '生管課' },
-      ]);
-
-      setTrendData([
-        { name: '一月', value: 82 },
-        { name: '二月', value: 85 },
-        { name: '三月', value: 84 },
-        { name: '四月', value: 88 },
-        { name: '五月', value: 86 },
-        { name: '六月', value: 89 },
-        { name: '七月', value: 87 },
-      ]);
-
+      setKpis(data.overview.kpis);
+      setAlerts(data.overview.alerts);
+      setTrendData(data.overview.trendData);
       setLoading(false);
-    }, 800);
-  }, []);
+    }, 400);
+  }, [data.overview]);
 
   /** 取得異常等級顏色 */
   const getAlertColor = (level: Alert['level']) => {

@@ -1,6 +1,7 @@
 import React from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import ReactECharts from 'echarts-for-react';
+import { useData } from '../../data/DataContext';
 
 /** 取得庫存子路由 */
 const useInventorySubRoute = () => {
@@ -13,6 +14,9 @@ const useInventorySubRoute = () => {
    子頁 1：庫存效能儀表板
    ================================================================ */
 const EfficiencyPage: React.FC = () => {
+  const { data } = useData();
+  const inv = data.inventory;
+
   const categoryOption = {
     tooltip: { trigger: 'item', formatter: '{b}: {c} ({d}%)' },
     legend: { orient: 'vertical', right: '5%', top: 'center', textStyle: { color: 'var(--text-secondary)' } },
@@ -20,13 +24,7 @@ const EfficiencyPage: React.FC = () => {
       type: 'pie', radius: ['45%', '70%'], center: ['38%', '50%'],
       itemStyle: { borderRadius: 6, borderColor: 'transparent', borderWidth: 2 },
       label: { show: true, formatter: '{b}\n{d}%', color: 'var(--text-primary)', fontSize: 11 },
-      data: [
-        { name: '原料', value: 4200000 },
-        { name: '半成品', value: 3100000 },
-        { name: '成品', value: 2800000 },
-        { name: '包裝材', value: 1200000 },
-        { name: '間接物料', value: 1268000 },
-      ],
+      data: inv.categories.map(c => ({ name: c.name, value: c.value })),
       color: ['#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899'],
     }],
   };
@@ -63,10 +61,10 @@ const EfficiencyPage: React.FC = () => {
       </div>
       <div className="kpi-grid">
         {[
-          { label: '總庫存金額', value: '12.6M', unit: 'NTD', color: 'var(--text-primary)' },
-          { label: '庫存週轉率', value: '8.4', unit: '次/年', color: 'var(--success)' },
-          { label: '平均庫存天數', value: '43', unit: '天', color: 'var(--warning)' },
-          { label: '倉庫利用率', value: '78%', unit: '', color: 'var(--info)' },
+          { label: '總庫存金額', value: `${(inv.totalValue / 1e6).toFixed(1)}M`, unit: 'NTD', color: 'var(--text-primary)' },
+          { label: '庫存週轉率', value: String(inv.turnoverRate), unit: '次/年', color: 'var(--success)' },
+          { label: '平均庫存天數', value: String(inv.avgDays), unit: '天', color: 'var(--warning)' },
+          { label: '倉庫利用率', value: `${inv.utilization}%`, unit: '', color: 'var(--info)' },
         ].map(k => (
           <div key={k.label} className="glass-panel kpi-card">
             <span className="kpi-label">{k.label}</span>
@@ -92,19 +90,13 @@ const EfficiencyPage: React.FC = () => {
               <tr><th>倉庫名稱</th><th>總容量</th><th>已使用</th><th>利用率</th><th>週轉率</th><th>狀態</th></tr>
             </thead>
             <tbody>
-              {[
-                { name: '原料倉 A', cap: 1000, used: 820, turn: 9.2, status: 'good' },
-                { name: '原料倉 B', cap: 800, used: 540, turn: 7.8, status: 'good' },
-                { name: '半成品區', cap: 600, used: 510, turn: 8.5, status: 'warning' },
-                { name: '成品倉', cap: 1200, used: 780, turn: 12.1, status: 'good' },
-                { name: '包裝材倉', cap: 400, used: 180, turn: 5.3, status: 'good' },
-              ].map(row => {
-                const rate = Math.round(row.used / row.cap * 100);
+              {inv.warehouses.map(row => {
+                const rate = Math.round(row.used / row.capacity * 100);
                 const color = row.status === 'good' ? 'var(--success)' : 'var(--warning)';
                 return (
                   <tr key={row.name}>
                     <td>{row.name}</td>
-                    <td>{row.cap} 棧板</td>
+                    <td>{row.capacity} 棧板</td>
                     <td>{row.used} 棧板</td>
                     <td>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -114,7 +106,7 @@ const EfficiencyPage: React.FC = () => {
                         <span style={{ color, fontWeight: 600, width: 40 }}>{rate}%</span>
                       </div>
                     </td>
-                    <td>{row.turn} 次/年</td>
+                    <td>{row.turnover} 次/年</td>
                     <td><span className="status-badge" style={{ background: `${color}20`, color }}>{row.status === 'good' ? '正常' : '偏高'}</span></td>
                   </tr>
                 );

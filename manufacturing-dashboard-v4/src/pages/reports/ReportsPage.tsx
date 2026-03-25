@@ -1,5 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback, lazy, Suspense } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
+import { getReportData, getAiReport, type ReportId } from '../../data/reportData';
+import { generatePDF, generateExcel, downloadBlob } from '../../utils/exportUtils';
+import { useData } from '../../data/DataContext';
+
+const DataManagementPage = lazy(() => import('./DataManagementPage'));
 
 const useReportsSubRoute = () => {
   const location = useLocation();
@@ -9,41 +14,111 @@ const useReportsSubRoute = () => {
 
 const subTabs = [
   { key: 'generator', label: '📋 報告生成', path: '/reports/generator' },
+  { key: 'data', label: '📂 資料管理', path: '/reports/data' },
   { key: 'settings', label: '⚙️ 系統設定', path: '/reports/settings' },
 ];
 
 /* ================================================================
    報告生成器
    ================================================================ */
+/** 歷史報告記錄 */
+interface ReportRecord {
+  id: string;
+  name: string;
+  format: 'pdf' | 'excel';
+  time: string;
+  blob: Blob;
+}
+
+/** 快速範本定義 */
+const quickTemplates: { label: string; ids: ReportId[] }[] = [
+  { label: '月度總結', ids: ['overview', 'inventory', 'production'] },
+  { label: '季度回顧', ids: ['overview', 'inventory', 'production', 'cost', 'supplier'] },
+  { label: '專案報告', ids: ['production', 'cost'] },
+  { label: '客戶匯報', ids: ['overview', 'supplier', 'ai'] },
+];
+
 const ReportGeneratorPage: React.FC = () => {
-  const [selectedReports, setSelectedReports] = useState<string[]>(['overview', 'inventory']);
-  const [dateRange, setDateRange] = useState({ start: '2026-03-01', end: '2026-03-24' });
-  const [format, setFormat] = useState<'pdf' | 'excel' | 'pptx'>('pdf');
+  const { data: ctxData } = useData();
+  const [selectedReports, setSelectedReports] = useState<ReportId[]>(['overview', 'inventory']);
+  const [dateRange, setDateRange] = useState({ start: '2026-03-01', end: '2026-03-25' });
+  const [format, setFormat] = useState<'pdf' | 'excel'>('pdf');
   const [generating, setGenerating] = useState(false);
+  const [history, setHistory] = useState<ReportRecord[]>([]);
+  const [error, setError] = useState<string | null>(null);
 
   const reportTypes = [
-    { id: 'overview', label: '經營總覽報告', desc: '包含所有核心 KPI 與趨勢分析', icon: '📊' },
-    { id: 'inventory', label: '庫存分析報告', desc: '庫存水位、週轉率、風險評估', icon: '📦' },
-    { id: 'production', label: '生產效能報告', desc: 'OEE、良率、產能分析', icon: '🏭' },
-    { id: 'cost', label: '成本分析報告', desc: '成本結構、差異分析、優化建議', icon: '💰' },
-    { id: 'supplier', label: '供應商評估報告', desc: '供應商評分、交期、風險', icon: '🚚' },
-    { id: 'ai', label: 'AI 預測報告', desc: '需求預測、異常偵測、優化建議', icon: '🤖' },
+    { id: 'overview' as ReportId, label: '經營總覽報告', desc: '包含所有核心 KPI 與趨勢分析', icon: '📊' },
+    { id: 'inventory' as ReportId, label: '庫存分析報告', desc: '庫存水位、週轉率、風險評估', icon: '📦' },
+    { id: 'production' as ReportId, label: '生產效能報告', desc: 'OEE、良率、產能分析', icon: '🏭' },
+    { id: 'cost' as ReportId, label: '成本分析報告', desc: '成本結構、差異分析、優化建議', icon: '💰' },
+    { id: 'supplier' as ReportId, label: '供應商評估報告', desc: '供應商評分、交期、風險', icon: '🚚' },
+    { id: 'ai' as ReportId, label: 'AI 預測報告', desc: '需求預測、異常偵測、優化建議', icon: '🤖' },
   ];
 
-  const toggleReport = (id: string) => {
+  const toggleReport = (id: ReportId) => {
     setSelectedReports(prev => prev.includes(id) ? prev.filter(r => r !== id) : [...prev, id]);
   };
 
-  const handleGenerate = () => {
+  const applyTemplate = (ids: ReportId[]) => {
+    setSelectedReports(ids);
+  };
+
+  /** 真正的報告生成 */
+  const handleGenerate = useCallback(async () => {
+    if (selectedReports.length === 0 || generating) return;
     setGenerating(true);
-    setTimeout(() => setGenerating(false), 2000);
+    setError(null);
+
+    try {
+      // AI 報告無 Context 資料，單獨處理
+      const aiSections = selectedReports.includes('ai') ? [getAiReport()] : [];
+      const contextualSections = getReportData(
+        selectedReports.filter(id => id !== 'ai'),
+        ctxData
+      );
+      const sections = [...contextualSections, ...aiSections];
+      const ext = format === 'pdf' ? 'pdf' : 'xlsx';
+
+      // PDF 為非同步（需等待字型載入），Excel 為同步
+      const blob = format === 'pdf'
+        ? await generatePDF(sections, dateRange)
+        : generateExcel(sections, dateRange);
+
+      const timestamp = new Date().toLocaleString('zh-TW', { hour12: false });
+      const sectionNames = sections.map(s => s.title).join(' + ');
+      const filename = `Manufacturing_Report_${dateRange.start}_${dateRange.end}.${ext}`;
+
+      // 觸發下載
+      downloadBlob(blob, filename);
+
+      // 新增歷史記錄
+      const record: ReportRecord = {
+        id: `${Date.now()}`,
+        name: sectionNames,
+        format,
+        time: timestamp,
+        blob,
+      };
+      setHistory(prev => [record, ...prev].slice(0, 20));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '報告生成失敗');
+    } finally {
+      setGenerating(false);
+    }
+  }, [selectedReports, format, dateRange, generating, ctxData]);
+
+  /** 重新下載歷史報告 */
+  const handleRedownload = (record: ReportRecord) => {
+    const ext = record.format === 'pdf' ? 'pdf' : 'xlsx';
+    downloadBlob(record.blob, `Report_${record.id}.${ext}`);
   };
 
   return (
     <div>
       <div className="page-header">
         <h1 style={{ fontSize: 28, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 8 }}>📋 報告生成器</h1>
-        <p style={{ fontSize: 14, color: 'var(--text-secondary)' }}>一鍵生成多元分析報告，支援 PDF/Excel/PPTX 格式</p>
+        <p style={{ fontSize: 14, color: 'var(--text-secondary)' }}>一鍵生成多元分析報告，支援 PDF / Excel 格式</p>
       </div>
 
       <div className="main-grid">
@@ -92,7 +167,7 @@ const ReportGeneratorPage: React.FC = () => {
             <div>
               <label style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 8 }}>輸出格式</label>
               <div style={{ display: 'flex', gap: 10 }}>
-                {(['pdf', 'excel', 'pptx'] as const).map(f => (
+                {(['pdf', 'excel'] as const).map(f => (
                   <button key={f} onClick={() => setFormat(f)}
                     style={{ padding: '8px 20px', borderRadius: 8, border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600,
                       background: format === f ? 'var(--accent)' : 'var(--glass-bg)',
@@ -107,20 +182,29 @@ const ReportGeneratorPage: React.FC = () => {
             <div>
               <label style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 8 }}>快速範本</label>
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                {['月度總結', '季度回顧', '專案報告', '客戶匯報'].map(t => (
-                  <span key={t} style={{ padding: '6px 12px', borderRadius: 20, background: 'var(--glass-bg)', border: '1px solid var(--glass-border)', fontSize: 12, color: 'var(--text-secondary)', cursor: 'pointer' }}>
-                    {t}
+                {quickTemplates.map(t => (
+                  <span key={t.label}
+                    onClick={() => applyTemplate(t.ids)}
+                    style={{ padding: '6px 12px', borderRadius: 20, background: 'var(--glass-bg)', border: '1px solid var(--glass-border)', fontSize: 12, color: 'var(--text-secondary)', cursor: 'pointer', transition: 'all 0.15s' }}>
+                    {t.label} ({t.ids.length})
                   </span>
                 ))}
               </div>
             </div>
+
+            {/* 錯誤提示 */}
+            {error && (
+              <div style={{ padding: '10px 14px', borderRadius: 8, background: 'rgba(239,68,68,0.1)', border: '1px solid var(--danger)', color: 'var(--danger)', fontSize: 13 }}>
+                {error}
+              </div>
+            )}
 
             {/* 生成按鈕 */}
             <button onClick={handleGenerate} disabled={generating || selectedReports.length === 0}
               style={{ padding: '14px 24px', borderRadius: 10, border: 'none', cursor: generating ? 'not-allowed' : 'pointer', fontSize: 15, fontWeight: 700,
                 background: generating || selectedReports.length === 0 ? 'var(--glass-bg)' : 'linear-gradient(135deg, var(--accent), #8b5cf6)',
                 color: selectedReports.length === 0 ? 'var(--text-muted)' : 'white', transition: 'all 0.3s' }}>
-              {generating ? '⏳ 生成中...' : `📥 生成 ${selectedReports.length} 份報告`}
+              {generating ? '⏳ 生成中...' : `📥 生成 ${selectedReports.length} 份報告 (${format.toUpperCase()})`}
             </button>
           </div>
         </div>
@@ -129,33 +213,39 @@ const ReportGeneratorPage: React.FC = () => {
       {/* 最近生成的報告 */}
       <div className="glass-panel" style={{ marginTop: 24 }}>
         <div className="chart-header"><h3 style={{ fontSize: 16, fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>最近生成的報告</h3></div>
-        <table className="data-table" style={{ marginTop: 12 }}>
-          <thead>
-            <tr>
-              <th>報告名稱</th>
-              <th>格式</th>
-              <th>生成時間</th>
-              <th>狀態</th>
-              <th>操作</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td>2026年2月經營總覽</td>
-              <td><span className="badge badge-info">PDF</span></td>
-              <td>2026-03-01 09:30</td>
-              <td><span className="badge badge-success">已完成</span></td>
-              <td><button style={{ padding: '4px 12px', borderRadius: 6, border: 'none', background: 'var(--accent)', color: 'white', cursor: 'pointer', fontSize: 12 }}>下載</button></td>
-            </tr>
-            <tr>
-              <td>庫存分析報告 Q1</td>
-              <td><span className="badge badge-info">Excel</span></td>
-              <td>2026-02-28 14:22</td>
-              <td><span className="badge badge-success">已完成</span></td>
-              <td><button style={{ padding: '4px 12px', borderRadius: 6, border: 'none', background: 'var(--accent)', color: 'white', cursor: 'pointer', fontSize: 12 }}>下載</button></td>
-            </tr>
-          </tbody>
-        </table>
+        {history.length === 0 ? (
+          <div style={{ padding: '32px 0', textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>
+            尚未生成任何報告，選擇報告類型後按下「生成」按鈕
+          </div>
+        ) : (
+          <table className="data-table" style={{ marginTop: 12 }}>
+            <thead>
+              <tr>
+                <th>報告名稱</th>
+                <th>格式</th>
+                <th>生成時間</th>
+                <th>狀態</th>
+                <th>操作</th>
+              </tr>
+            </thead>
+            <tbody>
+              {history.map(rec => (
+                <tr key={rec.id}>
+                  <td>{rec.name}</td>
+                  <td><span className="badge badge-info">{rec.format.toUpperCase()}</span></td>
+                  <td>{rec.time}</td>
+                  <td><span className="badge badge-success">已完成</span></td>
+                  <td>
+                    <button onClick={() => handleRedownload(rec)}
+                      style={{ padding: '4px 12px', borderRadius: 6, border: 'none', background: 'var(--accent)', color: 'white', cursor: 'pointer', fontSize: 12 }}>
+                      下載
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
       </div>
     </div>
   );
@@ -295,7 +385,9 @@ const ReportsPage: React.FC = () => {
           );
         })}
       </div>
-      {subRoute === 'generator' ? <ReportGeneratorPage /> : <SettingsPage />}
+      {subRoute === 'generator' && <ReportGeneratorPage />}
+      {subRoute === 'data' && <Suspense fallback={<div style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)' }}>載入中...</div>}><DataManagementPage /></Suspense>}
+      {subRoute === 'settings' && <SettingsPage />}
     </div>
   );
 };

@@ -1,6 +1,7 @@
 import React from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import ReactECharts from 'echarts-for-react';
+import { useData } from '../../data/DataContext';
 
 const useSupplierSubRoute = () => {
   const location = useLocation();
@@ -25,14 +26,13 @@ const getRiskColor = (level: 'low' | 'medium' | 'high') =>
    子頁 1：供應商評分卡
    ================================================================ */
 const ScorePage: React.FC = () => {
-  const suppliers = [
-    { code: 'S-001', name: '供應商 A', country: '台灣', cat: '電子原料', otd: 98.5, quality: 99.2, price: 97.8, service: 96.5, years: 8, vol: 28 },
-    { code: 'S-002', name: '供應商 B', country: '日本', cat: '包裝材料', otd: 96.2, quality: 98.5, price: 99.1, service: 97.2, years: 12, vol: 18.5 },
-    { code: 'S-003', name: '供應商 C', country: '中國', cat: '生產設備', otd: 88.2, quality: 97.2, price: 98.5, service: 93.1, years: 5, vol: 22 },
-    { code: 'S-004', name: '供應商 D', country: '韓國', cat: '間接物料', otd: 93.5, quality: 96.8, price: 97.2, service: 95.8, years: 6, vol: 12 },
-    { code: 'S-005', name: '供應商 E', country: '中國', cat: '電子原料', otd: 85.1, quality: 91.2, price: 96.5, service: 88.5, years: 3, vol: 15 },
-    { code: 'S-006', name: '供應商 F', country: '美國', cat: '物流服務', otd: 97.8, quality: 98.1, price: 95.2, service: 98.8, years: 7, vol: 8.5 },
-  ];
+  const { data: ctxData } = useData();
+  const supplierData = ctxData.supplier;
+  const suppliers = supplierData.suppliers.map(s => ({
+    code: s.code, name: s.name, country: s.country, cat: s.category,
+    otd: s.otd, quality: s.quality, price: s.price, service: s.service,
+    years: s.years, vol: s.volume,
+  }));
 
   const radarOption = {
     tooltip: {},
@@ -63,10 +63,10 @@ const ScorePage: React.FC = () => {
       </div>
       <div className="kpi-grid">
         {[
-          { label: '供應商總數', value: '156', unit: '家', color: 'var(--text-primary)' },
-          { label: '平均綜合評分', value: '92.4', unit: '分', color: 'var(--success)' },
-          { label: '優秀供應商（≥95）', value: '45', unit: '家', color: 'var(--success)' },
-          { label: '待改進（<85）', value: '12', unit: '家', color: 'var(--danger)' },
+          { label: '供應商總數', value: String(supplierData.totalCount), unit: '家', color: 'var(--text-primary)' },
+          { label: '平均綜合評分', value: String(supplierData.avgScore), unit: '分', color: 'var(--success)' },
+          { label: '優秀供應商（≥95）', value: String(supplierData.excellentCount), unit: '家', color: 'var(--success)' },
+          { label: '待改進（<85）', value: String(supplierData.improvementCount), unit: '家', color: 'var(--danger)' },
         ].map(k => (
           <div key={k.label} className="glass-panel kpi-card">
             <span className="kpi-label">{k.label}</span>

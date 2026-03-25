@@ -1,6 +1,7 @@
 import React from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import ReactECharts from 'echarts-for-react';
+import { useData } from '../../data/DataContext';
 
 const useProcurementSubRoute = () => {
   const location = useLocation();
@@ -22,6 +23,8 @@ const pStyles: Record<string, React.CSSProperties> = {
    子頁 1：採購支出分析
    ================================================================ */
 const SpendPage: React.FC = () => {
+  const { data: ctxData } = useData();
+  const proc = ctxData.procurement;
   const trendOption = {
     tooltip: { trigger: 'axis', backgroundColor: 'var(--glass-bg)', borderColor: 'var(--glass-border)', textStyle: { color: 'var(--text-primary)' } },
     legend: { data: ['採購金額', '預算'], textStyle: { color: 'var(--text-secondary)' }, top: 4 },
@@ -41,13 +44,7 @@ const SpendPage: React.FC = () => {
       type: 'pie', radius: ['45%', '70%'], center: ['38%', '50%'],
       itemStyle: { borderRadius: 6 },
       label: { show: true, formatter: '{b}\n{d}%', color: 'var(--text-primary)', fontSize: 11 },
-      data: [
-        { name: '電子原料', value: 18500000 },
-        { name: '包裝材料', value: 9200000 },
-        { name: '生產設備', value: 6800000 },
-        { name: '間接物料', value: 5800000 },
-        { name: '物流服務', value: 5380000 },
-      ],
+      data: proc.categories.map(c => ({ name: c.name, value: c.amount })),
       color: ['#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899'],
     }],
   };
@@ -60,10 +57,10 @@ const SpendPage: React.FC = () => {
       </div>
       <div className="kpi-grid">
         {[
-          { label: '年度採購總額', value: '45.7M', unit: 'NTD', color: 'var(--text-primary)' },
-          { label: '預算執行率', value: '96.2%', unit: '', color: 'var(--success)' },
-          { label: '活躍供應商', value: '156', unit: '家', color: 'var(--text-primary)' },
-          { label: '待處理 PO', value: '28', unit: '筆', color: 'var(--warning)' },
+          { label: '年度採購總額', value: `${(proc.totalAmount / 1e6).toFixed(1)}M`, unit: 'NTD', color: 'var(--text-primary)' },
+          { label: '預算執行率', value: `${proc.budgetRate}%`, unit: '', color: 'var(--success)' },
+          { label: '活躍供應商', value: String(proc.activeSuppliers), unit: '家', color: 'var(--text-primary)' },
+          { label: '待處理 PO', value: String(proc.pendingPO), unit: '筆', color: 'var(--warning)' },
         ].map(k => (
           <div key={k.label} className="glass-panel kpi-card">
             <span className="kpi-label">{k.label}</span>
@@ -89,18 +86,12 @@ const SpendPage: React.FC = () => {
               <tr><th>品類</th><th>H1 採購額</th><th>年度預算</th><th>執行率</th><th>供應商數</th><th>主要供應商</th></tr>
             </thead>
             <tbody>
-              {[
-                { cat: '電子原料', amount: 18500000, budget: 20000000, suppliers: 42, top: '供應商 A' },
-                { cat: '包裝材料', amount: 9200000, budget: 9000000, suppliers: 28, top: '供應商 B' },
-                { cat: '生產設備', amount: 6800000, budget: 8000000, suppliers: 15, top: '供應商 F' },
-                { cat: '間接物料', amount: 5800000, budget: 6000000, suppliers: 38, top: '供應商 G' },
-                { cat: '物流服務', amount: 5380000, budget: 5500000, suppliers: 33, top: '供應商 E' },
-              ].map(row => {
+              {proc.categories.map(row => {
                 const rate = Math.round(row.amount / row.budget * 100);
                 const rateColor = rate > 100 ? 'var(--danger)' : rate > 90 ? 'var(--success)' : 'var(--warning)';
                 return (
-                  <tr key={row.cat}>
-                    <td>{row.cat}</td>
+                  <tr key={row.name}>
+                    <td>{row.name}</td>
                     <td>${(row.amount / 1e6).toFixed(2)}M</td>
                     <td>${(row.budget / 1e6).toFixed(2)}M</td>
                     <td>
@@ -112,7 +103,7 @@ const SpendPage: React.FC = () => {
                       </div>
                     </td>
                     <td>{row.suppliers}</td>
-                    <td>{row.top}</td>
+                    <td>{row.topSupplier}</td>
                   </tr>
                 );
               })}
