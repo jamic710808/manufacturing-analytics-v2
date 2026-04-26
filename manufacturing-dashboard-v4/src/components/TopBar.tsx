@@ -5,6 +5,7 @@ interface TopBarProps {
   theme: 'dark' | 'light';
   onToggleTheme: () => void;
   onToggleSidebar: () => void;
+  onOpenAI: () => void;
 }
 
 interface HealthStatus {
@@ -51,7 +52,7 @@ const healthIndicators: HealthStatus[] = [
   { label: '庫存', value: 92, status: 'good' },
 ];
 
-const TopBar: React.FC<TopBarProps> = ({ theme, onToggleTheme, onToggleSidebar }) => {
+const TopBar: React.FC<TopBarProps> = ({ theme, onToggleTheme, onToggleSidebar, onOpenAI }) => {
   const location = useLocation();
 
   const getStatusColor = (status: HealthStatus['status']) => {
@@ -119,6 +120,14 @@ const TopBar: React.FC<TopBarProps> = ({ theme, onToggleTheme, onToggleSidebar }
           <span style={styles.badge}>3</span>
         </button>
         <button className="btn btn-ghost" style={styles.iconBtn} title="匯出報告">📤</button>
+        <button
+          onClick={onOpenAI}
+          className="btn btn-ghost"
+          style={{ ...styles.iconBtn, background: 'linear-gradient(135deg, rgba(99,102,241,0.15), rgba(139,92,246,0.1))', color: 'var(--purple)', border: '1px solid rgba(139,92,246,0.25)', borderRadius: 'var(--radius-sm)' }}
+          title="AI 製造分析師"
+        >
+          🤖
+        </button>
         <div style={styles.userAvatar}>👤</div>
       </div>
     </header>
