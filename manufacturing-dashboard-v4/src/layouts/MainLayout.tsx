@@ -35,6 +35,9 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
         <div className="page-content">
           {children}
         </div>
+        <div className="page-footer-copyright">
+          © 2026 KENLIU(劉炳祥) 版權所有 · 設計與開發由 Claude Code 及 MiniMax 協同製作
+        </div>
       </main>
 
       <AIChatPanel isOpen={aiPanelOpen} onClose={() => setAIPanelOpen(false)} />

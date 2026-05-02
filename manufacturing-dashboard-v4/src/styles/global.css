@@ -170,6 +170,17 @@ body.light-mode {
   overflow-y: auto;
 }
 
+.page-footer-copyright {
+  margin-top: 16px;
+  padding: 10px var(--content-padding);
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  border-top: 1px solid var(--glass-border);
+  letter-spacing: 0.03em;
+  flex-shrink: 0;
+}
+
 /* ===== Glass Panel ===== */
 .glass-panel {
   background: var(--glass-bg);
