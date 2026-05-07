@@ -26,7 +26,8 @@ interface AICfg {
   model: string;
   temperature: number;
   useStream: boolean;
-  useCorsProxy: boolean;
+  corsProxyMode: 'off' | 'local' | 'custom';
+  corsProxyUrl: string;
   maxTokens: number;
   savedKeys: Record<string, string>;
   savedBaseUrls: Record<string, string>;
@@ -128,10 +129,19 @@ function renderMd(raw: string): string {
 const CFG_KEY = 'mfgDashAICfg_v4';
 
 function loadCfg(): AICfg {
-  const def: AICfg = { provider: 'openai', model: 'gpt-4o-mini', temperature: 0.3, useStream: true, useCorsProxy: false, maxTokens: 4096, savedKeys: {}, savedBaseUrls: {} };
+  const def: AICfg = {
+    provider: 'openai', model: 'gpt-4o-mini', temperature: 0.3, useStream: true,
+    corsProxyMode: 'off', corsProxyUrl: '',
+    maxTokens: 4096, savedKeys: {}, savedBaseUrls: {},
+  };
   try {
     const s = localStorage.getItem(CFG_KEY);
-    if (s) return { ...def, ...JSON.parse(s) };
+    if (s) {
+      const p = JSON.parse(s);
+      // 向後相容：舊版 boolean useCorsProxy → 新版 string mode
+      if (!p.corsProxyMode && p.useCorsProxy === true) p.corsProxyMode = 'local';
+      return { ...def, ...p };
+    }
   } catch {}
   return def;
 }
@@ -159,7 +169,8 @@ const AIChatPanel: React.FC<AIChatPanelProps> = ({ isOpen, onClose }) => {
   const [formModel, setFormModel] = useState(cfg.model);
   const [formEndpoint, setFormEndpoint] = useState('');
   const [formStream, setFormStream] = useState(cfg.useStream);
-  const [formCorsProxy, setFormCorsProxy] = useState(cfg.useCorsProxy);
+  const [formCorsProxyMode, setFormCorsProxyMode] = useState<'off' | 'local' | 'custom'>(cfg.corsProxyMode);
+  const [formCorsProxyUrl, setFormCorsProxyUrl] = useState(cfg.corsProxyUrl);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
@@ -195,9 +206,12 @@ const AIChatPanel: React.FC<AIChatPanelProps> = ({ isOpen, onClose }) => {
   }, []);
 
   // ── Settings form ──────────────────────────────────────────────────────
-  // 將目標 URL 轉為代理 URL（繞過 CORS）
-  const toProxyUrl = (url: string, useProxy: boolean) =>
-    useProxy ? `http://localhost:8080/proxy?url=${encodeURIComponent(url)}` : url;
+  // 依代理模式包裝原始端點 URL
+  const wrapWithProxy = (originalUrl: string, mode: 'off' | 'local' | 'custom', customUrl: string) => {
+    if (mode === 'local') return `http://localhost:8080/proxy?url=${encodeURIComponent(originalUrl)}`;
+    if (mode === 'custom' && customUrl) return `${customUrl.replace(/\/$/, '')}?url=${encodeURIComponent(originalUrl)}`;
+    return originalUrl;
+  };
 
   const openSettings = () => {
     const p = cfg.provider;
@@ -206,7 +220,8 @@ const AIChatPanel: React.FC<AIChatPanelProps> = ({ isOpen, onClose }) => {
     setFormModel(cfg.model);
     setFormEndpoint(cfg.savedBaseUrls[p] ?? PROVIDERS[p]?.baseUrl ?? '');
     setFormStream(cfg.useStream);
-    setFormCorsProxy(cfg.useCorsProxy);
+    setFormCorsProxyMode(cfg.corsProxyMode);
+    setFormCorsProxyUrl(cfg.corsProxyUrl);
     setTestStatus(null);
     setShowSettings(true);
   };
@@ -230,7 +245,8 @@ const AIChatPanel: React.FC<AIChatPanelProps> = ({ isOpen, onClose }) => {
       provider: formProvider,
       model: formModel,
       useStream: formStream,
-      useCorsProxy: formCorsProxy,
+      corsProxyMode: formCorsProxyMode,
+      corsProxyUrl: formCorsProxyUrl,
       savedKeys: { ...cfg.savedKeys, [formProvider]: formKey },
       savedBaseUrls: { ...cfg.savedBaseUrls, [formProvider]: formEndpoint },
     };
@@ -249,7 +265,7 @@ const AIChatPanel: React.FC<AIChatPanelProps> = ({ isOpen, onClose }) => {
     try {
       const base = (formEndpoint || (PROVIDERS[formProvider]?.baseUrl ?? '')).replace(/\/+$/, '');
       const rawUrl = `${base}/chat/completions`;
-      const fetchUrl = toProxyUrl(rawUrl, formCorsProxy);
+      const fetchUrl = wrapWithProxy(rawUrl, formCorsProxyMode, formCorsProxyUrl);
       const res = await fetch(fetchUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${formKey}` },
@@ -343,10 +359,11 @@ const AIChatPanel: React.FC<AIChatPanelProps> = ({ isOpen, onClose }) => {
       let result: { content: string; thinking: string };
 
       const sysPrompt = dynamicSystemPromptRef.current;
-      const proxy = c.useCorsProxy;
+      const proxyMode = c.corsProxyMode;
+      const proxyUrl = c.corsProxyUrl;
 
       if (prov.apiFormat === 'anthropic') {
-        const fetchUrl = toProxyUrl(`${base}/v1/messages`, proxy);
+        const fetchUrl = wrapWithProxy(`${base}/v1/messages`, proxyMode, proxyUrl);
         const res = await fetch(fetchUrl, {
           method: 'POST', signal: abort.signal,
           headers: { 'Content-Type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01' },
@@ -360,7 +377,7 @@ const AIChatPanel: React.FC<AIChatPanelProps> = ({ isOpen, onClose }) => {
           result = { content: data.content?.map((x: any) => x.text ?? '').join('') ?? '', thinking: '' };
         }
       } else {
-        const fetchUrl = toProxyUrl(`${base}/chat/completions`, proxy);
+        const fetchUrl = wrapWithProxy(`${base}/chat/completions`, proxyMode, proxyUrl);
         const res = await fetch(fetchUrl, {
           method: 'POST', signal: abort.signal,
           headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${key}` },
@@ -452,21 +469,37 @@ const AIChatPanel: React.FC<AIChatPanelProps> = ({ isOpen, onClose }) => {
                 </select>
               )}
             </div>
-            <div style={{ display: 'flex', gap: 16 }}>
-              <div className="ai-fld" style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 0 }}>
-                <input type="checkbox" id="chk-stream" checked={formStream} onChange={e => setFormStream(e.target.checked)} />
-                <label htmlFor="chk-stream" style={{ marginBottom: 0, cursor: 'pointer' }}>串流輸出</label>
-              </div>
-              <div className="ai-fld" style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 0 }}>
-                <input type="checkbox" id="chk-cors" checked={formCorsProxy} onChange={e => setFormCorsProxy(e.target.checked)} />
-                <label htmlFor="chk-cors" style={{ marginBottom: 0, cursor: 'pointer', color: formCorsProxy ? 'var(--warning)' : undefined }}>
-                  繞過 CORS 代理
-                </label>
-              </div>
+            <div className="ai-fld" style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+              <input type="checkbox" id="chk-stream" checked={formStream} onChange={e => setFormStream(e.target.checked)} />
+              <label htmlFor="chk-stream" style={{ marginBottom: 0, cursor: 'pointer' }}>串流輸出</label>
             </div>
-            {formCorsProxy && (
+            <div className="ai-fld">
+              <label>CORS 代理</label>
+              <select value={formCorsProxyMode} onChange={e => setFormCorsProxyMode(e.target.value as 'off' | 'local' | 'custom')}>
+                <option value="off">關閉（直連）</option>
+                <option value="local">本機代理（:8080）</option>
+                <option value="custom">自訂代理 URL</option>
+              </select>
+            </div>
+            {formCorsProxyMode === 'custom' && (
+              <div className="ai-fld">
+                <label>代理 URL</label>
+                <input
+                  type="text"
+                  value={formCorsProxyUrl}
+                  onChange={e => setFormCorsProxyUrl(e.target.value)}
+                  placeholder="https://your-app.vercel.app/api/proxy"
+                />
+              </div>
+            )}
+            {formCorsProxyMode === 'local' && (
               <div style={{ fontSize: 11, color: 'var(--warning)', background: 'rgba(245,158,11,0.08)', padding: '6px 10px', borderRadius: 6, marginBottom: 2 }}>
                 ⚠️ 請先執行 <code>python mfg_cors_proxy.py</code>，請求將由 localhost:8080 轉發
+              </div>
+            )}
+            {formCorsProxyMode === 'custom' && formCorsProxyUrl && (
+              <div style={{ fontSize: 11, color: 'var(--warning)', background: 'rgba(245,158,11,0.08)', padding: '6px 10px', borderRadius: 6, marginBottom: 2 }}>
+                ⚠️ 自訂代理需支援 <code>?url=</code> 查詢參數轉發
               </div>
             )}
             {testStatus && <div className={`ai-test-status ${testStatus.type}`}>{testStatus.text}</div>}
