@@ -5,6 +5,9 @@ import { pathToModuleId, buildPageContext } from '../../utils/buildPageContext';
 
 // ── Types ──────────────────────────────────────────────────────────────────
 type ApiFormat = 'openai' | 'anthropic';
+type CorsProxyMode = 'off' | 'local' | 'custom' | 'vercel';
+
+const CUSTOM_SENTINEL = '__custom__';
 
 interface Provider {
   name: string;
@@ -12,6 +15,7 @@ interface Provider {
   models: string[];
   defaultModel: string;
   apiFormat: ApiFormat;
+  allowCustomModel?: boolean;
 }
 
 interface Message {
@@ -26,7 +30,7 @@ interface AICfg {
   model: string;
   temperature: number;
   useStream: boolean;
-  corsProxyMode: 'off' | 'local' | 'custom';
+  corsProxyMode: CorsProxyMode;
   corsProxyUrl: string;
   maxTokens: number;
   savedKeys: Record<string, string>;
@@ -69,6 +73,7 @@ const PROVIDERS: Record<string, Provider> = {
     name: 'OpenRouter', baseUrl: 'https://openrouter.ai/api/v1', apiFormat: 'openai',
     models: ['anthropic/claude-sonnet-4-6', 'openai/gpt-4o', 'deepseek/deepseek-chat', 'google/gemini-2.5-flash'],
     defaultModel: 'deepseek/deepseek-chat',
+    allowCustomModel: true,
   },
   ollama: {
     name: 'Ollama（本地）', baseUrl: 'http://localhost:11434/v1', apiFormat: 'openai',
@@ -108,6 +113,70 @@ const PAGE_QUESTIONS: Record<string, string[]> = {
 };
 const DEFAULT_QUESTIONS = ['這個頁面最重要的指標是什麼？', '目前有哪些需要立即關注的問題？', '請提供 3 個改善建議'];
 
+// ── 追加問題庫（智能 Quick Reply）──────────────────────────────────────────
+interface FollowupEntry { keywords: string[]; questions: string[] }
+
+const PAGE_FOLLOWUPS: Record<string, FollowupEntry[]> = {
+  '/overview': [
+    { keywords: ['OEE', '設備效能', '稼動率'], questions: ['OEE 三大損失（可用率/效率/品質率）如何分解？', '哪條產線 OEE 最低，需要優先改善？'] },
+    { keywords: ['品質', '不良率', '良率', '缺陷'], questions: ['不良品的主要根因是什麼？', '如何建立有效的品質預警機制？'] },
+    { keywords: ['庫存', '缺料', '斷料', '備料'], questions: ['哪些關鍵物料庫存最緊張？', '如何科學設定安全庫存水位？'] },
+    { keywords: ['成本', '費用', '超支'], questions: ['成本節約的最大槓桿在哪個環節？', '如何區分結構性成本與臨時性超支？'] },
+    { keywords: ['供應商', '交期', 'OTD'], questions: ['交期最差的供應商有哪些替代方案？', '如何評估供應商替換的成本效益？'] },
+  ],
+  '/production': [
+    { keywords: ['良率', '不良', 'Cpk', '製程能力'], questions: ['製程能力不足的根本原因為何？', '如何設計 SPC 管制計劃？'] },
+    { keywords: ['OEE', '設備', '停機', '維護'], questions: ['停機最頻繁的設備是哪台？', '預防保養計劃是否需要調整頻率？'] },
+    { keywords: ['產能', '瓶頸', '排程'], questions: ['如何找出並消除生產瓶頸？', '排程優化可以帶來多少產能提升？'] },
+    { keywords: ['換線', '換模', '準備時間'], questions: ['換線時間壓縮的 SMED 方法如何導入？', '哪個品項換線最耗時？'] },
+  ],
+  '/supplier': [
+    { keywords: ['評分', '績效', '風險'], questions: ['風險最高的供應商如何制定應急備援計劃？', '供應商評分如何量化轉化為採購決策？'] },
+    { keywords: ['交期', 'OTD', '延誤'], questions: ['交期延誤的系統性原因是什麼？', '如何在合約中加入有效的交期 KPI 約束？'] },
+    { keywords: ['品質', '退貨', '不合格', '來料'], questions: ['來料不合格的根因是什麼？', '如何優化供應商入料品質保證流程？'] },
+  ],
+  '/inventory': [
+    { keywords: ['周轉率', '呆滯', '滯銷'], questions: ['呆滯庫存如何處置最具效益？', '周轉率低的根本原因是需求預測還是備料策略？'] },
+    { keywords: ['缺料', '斷料', '安全庫存'], questions: ['如何計算科學的安全庫存水位？', '哪些物料需要優先補貨？'] },
+    { keywords: ['庫存金額', '資金', '佔用'], questions: ['降低庫存金額對現金流的改善幅度有多大？', '哪個品項的庫存佔用資金最多？'] },
+  ],
+  '/cost': [
+    { keywords: ['直接材料', '原物料', '材料成本'], questions: ['如何通過設計改善降低材料成本？', '材料價格波動如何對沖風險？'] },
+    { keywords: ['人工', '人力', '工資', '勞動'], questions: ['人工效率提升有哪些具體方案？', '自動化替代的 ROI 如何評估？'] },
+    { keywords: ['製造費用', '間接費用', '固定成本'], questions: ['固定成本的最優攤銷策略是什麼？', '如何識別並削減非必要製造費用？'] },
+  ],
+  '/procurement': [
+    { keywords: ['供應商', '詢比價', '議價'], questions: ['如何建立更有效的詢比價流程？', '哪些品項有更大的議價空間？'] },
+    { keywords: ['採購金額', '支出', '成本節約'], questions: ['集中採購的效益如何量化？', '哪些品類適合策略性備貨降低成本？'] },
+  ],
+  '/alert': [
+    { keywords: ['異常', '預警', '警報'], questions: ['這個異常的根因分析（RCA）應該從哪裡開始？', '類似異常歷史上發生過幾次？'] },
+    { keywords: ['重複', '慢性', '系統性'], questions: ['如何建立防止慢性異常的機制？', '這類問題的永久改善對策是什麼？'] },
+  ],
+};
+
+const GENERIC_FOLLOWUPS = [
+  '針對上述分析，請給出 3 個優先行動建議',
+  '這個問題的根本原因（Root Cause）是什麼？',
+  '如何建立可追蹤的改善 KPI？',
+  '最快可以見效的改善措施是什麼？',
+  '有哪些國際製造業最佳實踐可以參考？',
+];
+
+function getFollowupQuestions(pageRoot: string, assistantContent: string): string[] {
+  const bank = PAGE_FOLLOWUPS[pageRoot] ?? [];
+  const matched: string[] = [];
+  for (const entry of bank) {
+    if (entry.keywords.some(kw => assistantContent.includes(kw))) {
+      matched.push(...entry.questions);
+    }
+  }
+  const unique = [...new Set(matched)];
+  if (unique.length >= 3) return unique.slice(0, 3);
+  const generics = GENERIC_FOLLOWUPS.filter(q => !unique.includes(q));
+  return [...unique, ...generics].slice(0, 3);
+}
+
 // ── Markdown renderer ──────────────────────────────────────────────────────
 function renderMd(raw: string): string {
   return raw
@@ -131,7 +200,7 @@ const CFG_KEY = 'mfgDashAICfg_v4';
 function loadCfg(): AICfg {
   const def: AICfg = {
     provider: 'openai', model: 'gpt-4o-mini', temperature: 0.3, useStream: true,
-    corsProxyMode: 'off', corsProxyUrl: '',
+    corsProxyMode: 'vercel', corsProxyUrl: '',
     maxTokens: 4096, savedKeys: {}, savedBaseUrls: {},
   };
   try {
@@ -167,9 +236,10 @@ const AIChatPanel: React.FC<AIChatPanelProps> = ({ isOpen, onClose }) => {
   const [formProvider, setFormProvider] = useState(cfg.provider);
   const [formKey, setFormKey] = useState('');
   const [formModel, setFormModel] = useState(cfg.model);
+  const [formCustomModelInput, setFormCustomModelInput] = useState('');
   const [formEndpoint, setFormEndpoint] = useState('');
   const [formStream, setFormStream] = useState(cfg.useStream);
-  const [formCorsProxyMode, setFormCorsProxyMode] = useState<'off' | 'local' | 'custom'>(cfg.corsProxyMode);
+  const [formCorsProxyMode, setFormCorsProxyMode] = useState<CorsProxyMode>(cfg.corsProxyMode);
   const [formCorsProxyUrl, setFormCorsProxyUrl] = useState(cfg.corsProxyUrl);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -191,11 +261,9 @@ const AIChatPanel: React.FC<AIChatPanelProps> = ({ isOpen, onClose }) => {
   const moduleId = pathToModuleId(location.pathname);
   const pageCtx = moduleId ? buildPageContext(data, moduleId) : '';
   const dataUpdatedAt = moduleId ? lastUpdated[moduleId] : null;
-  // 動態 System Prompt：基礎提示 + 當前頁面即時數據
   const dynamicSystemPrompt = pageCtx
     ? `${SYSTEM_PROMPT}\n\n## 當前頁面即時數據（分析請以此為依據）\n${pageCtx}`
     : SYSTEM_PROMPT;
-  // 用 ref 確保 async 函式讀到最新值
   const dynamicSystemPromptRef = useRef(dynamicSystemPrompt);
   useEffect(() => { dynamicSystemPromptRef.current = dynamicSystemPrompt; }, [dynamicSystemPrompt]);
 
@@ -205,19 +273,34 @@ const AIChatPanel: React.FC<AIChatPanelProps> = ({ isOpen, onClose }) => {
     setTimeout(() => setToast(null), 3000);
   }, []);
 
-  // ── Settings form ──────────────────────────────────────────────────────
-  // 依代理模式包裝原始端點 URL
-  const wrapWithProxy = (originalUrl: string, mode: 'off' | 'local' | 'custom', customUrl: string) => {
-    if (mode === 'local') return `http://localhost:8080/proxy?url=${encodeURIComponent(originalUrl)}`;
+  // ── Clear messages ─────────────────────────────────────────────────────
+  const clearMessages = useCallback(() => {
+    setMessages([]);
+    setStreamingText('');
+    showToast('🗑️ 對話紀錄已清除', 'info');
+  }, [showToast]);
+
+  // ── 依代理模式包裝原始端點 URL ─────────────────────────────────────────
+  const wrapWithProxy = (originalUrl: string, mode: CorsProxyMode, customUrl: string) => {
+    if (mode === 'local')   return `http://localhost:8080/proxy?url=${encodeURIComponent(originalUrl)}`;
+    if (mode === 'vercel')  return `/api/proxy?url=${encodeURIComponent(originalUrl)}`;
     if (mode === 'custom' && customUrl) return `${customUrl.replace(/\/$/, '')}?url=${encodeURIComponent(originalUrl)}`;
     return originalUrl;
   };
 
+  // ── Settings helpers ───────────────────────────────────────────────────
+  // 解析 formModel + formCustomModelInput → 實際模型名稱
+  const resolveModel = (model: string, customInput: string) =>
+    model === CUSTOM_SENTINEL ? customInput : model;
+
   const openSettings = () => {
     const p = cfg.provider;
+    const prov = PROVIDERS[p];
+    const isCustomModel = prov?.allowCustomModel && !prov.models.includes(cfg.model);
     setFormProvider(p);
     setFormKey(cfg.savedKeys[p] ?? '');
-    setFormModel(cfg.model);
+    setFormModel(isCustomModel ? CUSTOM_SENTINEL : cfg.model);
+    setFormCustomModelInput(isCustomModel ? cfg.model : '');
     setFormEndpoint(cfg.savedBaseUrls[p] ?? PROVIDERS[p]?.baseUrl ?? '');
     setFormStream(cfg.useStream);
     setFormCorsProxyMode(cfg.corsProxyMode);
@@ -236,14 +319,20 @@ const AIChatPanel: React.FC<AIChatPanelProps> = ({ isOpen, onClose }) => {
     setFormKey(cfg.savedKeys[id] ?? '');
     setFormEndpoint(cfg.savedBaseUrls[id] ?? PROVIDERS[id]?.baseUrl ?? '');
     setFormModel(PROVIDERS[id]?.defaultModel ?? '');
+    setFormCustomModelInput('');
     setTestStatus(null);
   };
 
   const saveSettings = () => {
+    const resolvedModel = resolveModel(formModel, formCustomModelInput);
+    if (!resolvedModel && formProvider !== 'custom') {
+      showToast('⚠️ 請填寫模型名稱', 'err');
+      return;
+    }
     const next: AICfg = {
       ...cfg,
       provider: formProvider,
-      model: formModel,
+      model: resolvedModel,
       useStream: formStream,
       corsProxyMode: formCorsProxyMode,
       corsProxyUrl: formCorsProxyUrl,
@@ -257,7 +346,8 @@ const AIChatPanel: React.FC<AIChatPanelProps> = ({ isOpen, onClose }) => {
   };
 
   const testConnection = async () => {
-    if (!formKey || !formModel) {
+    const resolvedModel = resolveModel(formModel, formCustomModelInput);
+    if (!formKey || !resolvedModel) {
       setTestStatus({ text: '❌ 請填寫 API Key 及模型', type: 'err' });
       return;
     }
@@ -269,7 +359,7 @@ const AIChatPanel: React.FC<AIChatPanelProps> = ({ isOpen, onClose }) => {
       const res = await fetch(fetchUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${formKey}` },
-        body: JSON.stringify({ model: formModel, messages: [{ role: 'user', content: 'ping' }], max_tokens: 5, stream: false }),
+        body: JSON.stringify({ model: resolvedModel, messages: [{ role: 'user', content: 'ping' }], max_tokens: 5, stream: false }),
       });
       if (res.ok) {
         setTestStatus({ text: '✅ 連線成功！模型回應正常。', type: 'ok' });
@@ -357,7 +447,6 @@ const AIChatPanel: React.FC<AIChatPanelProps> = ({ isOpen, onClose }) => {
 
     try {
       let result: { content: string; thinking: string };
-
       const sysPrompt = dynamicSystemPromptRef.current;
       const proxyMode = c.corsProxyMode;
       const proxyUrl = c.corsProxyUrl;
@@ -413,6 +502,9 @@ const AIChatPanel: React.FC<AIChatPanelProps> = ({ isOpen, onClose }) => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(inputText); }
   };
 
+  // 目前最後一條 assistant 訊息（用於 follow-up）
+  const lastAssistantMsg = [...messages].reverse().find(m => m.role === 'assistant');
+
   return (
     <>
       {isOpen && <div className="ai-overlay" onClick={onClose} />}
@@ -435,7 +527,7 @@ const AIChatPanel: React.FC<AIChatPanelProps> = ({ isOpen, onClose }) => {
           </div>
           <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
             <button className="ai-icon-btn" onClick={openSettings} title="設定">⚙️</button>
-            <button className="ai-icon-btn" onClick={() => { setMessages([]); setStreamingText(''); }} title="清除對話">🗑️</button>
+            <button className="ai-icon-btn" onClick={clearMessages} title="清除對話">🗑️</button>
             <button className="ai-icon-btn" onClick={onClose} title="關閉">✕</button>
           </div>
         </div>
@@ -464,9 +556,23 @@ const AIChatPanel: React.FC<AIChatPanelProps> = ({ isOpen, onClose }) => {
               {formProvider === 'custom' ? (
                 <input type="text" value={formModel} onChange={e => setFormModel(e.target.value)} placeholder="gpt-4o" />
               ) : (
-                <select value={formModel} onChange={e => setFormModel(e.target.value)}>
-                  {(PROVIDERS[formProvider]?.models ?? []).map(m => <option key={m} value={m}>{m}</option>)}
-                </select>
+                <>
+                  <select value={formModel} onChange={e => setFormModel(e.target.value)}>
+                    {(PROVIDERS[formProvider]?.models ?? []).map(m => <option key={m} value={m}>{m}</option>)}
+                    {PROVIDERS[formProvider]?.allowCustomModel && (
+                      <option value={CUSTOM_SENTINEL}>自訂（手動填入）…</option>
+                    )}
+                  </select>
+                  {PROVIDERS[formProvider]?.allowCustomModel && formModel === CUSTOM_SENTINEL && (
+                    <input
+                      type="text"
+                      value={formCustomModelInput}
+                      onChange={e => setFormCustomModelInput(e.target.value)}
+                      placeholder="例如 meta-llama/llama-4-maverick"
+                      style={{ marginTop: 4 }}
+                    />
+                  )}
+                </>
               )}
             </div>
             <div className="ai-fld" style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 }}>
@@ -475,8 +581,9 @@ const AIChatPanel: React.FC<AIChatPanelProps> = ({ isOpen, onClose }) => {
             </div>
             <div className="ai-fld">
               <label>CORS 代理</label>
-              <select value={formCorsProxyMode} onChange={e => setFormCorsProxyMode(e.target.value as 'off' | 'local' | 'custom')}>
+              <select value={formCorsProxyMode} onChange={e => setFormCorsProxyMode(e.target.value as CorsProxyMode)}>
                 <option value="off">關閉（直連）</option>
+                <option value="vercel">Vercel 代理（本站 /api/proxy）</option>
                 <option value="local">本機代理（:8080）</option>
                 <option value="custom">自訂代理 URL</option>
               </select>
@@ -497,6 +604,11 @@ const AIChatPanel: React.FC<AIChatPanelProps> = ({ isOpen, onClose }) => {
                 ⚠️ 請先執行 <code>python mfg_cors_proxy.py</code>，請求將由 localhost:8080 轉發
               </div>
             )}
+            {formCorsProxyMode === 'vercel' && (
+              <div style={{ fontSize: 11, color: 'var(--success, #10b981)', background: 'rgba(16,185,129,0.08)', padding: '6px 10px', borderRadius: 6, marginBottom: 2 }}>
+                ✅ 使用本站 /api/proxy Serverless Function 轉發，無需額外設定
+              </div>
+            )}
             {formCorsProxyMode === 'custom' && formCorsProxyUrl && (
               <div style={{ fontSize: 11, color: 'var(--warning)', background: 'rgba(245,158,11,0.08)', padding: '6px 10px', borderRadius: 6, marginBottom: 2 }}>
                 ⚠️ 自訂代理需支援 <code>?url=</code> 查詢參數轉發
@@ -506,7 +618,15 @@ const AIChatPanel: React.FC<AIChatPanelProps> = ({ isOpen, onClose }) => {
             <div style={{ display: 'flex', gap: 8 }}>
               <button className="btn btn-ghost" style={{ flex: 1, fontSize: 13, padding: '8px 0' }} onClick={testConnection}>連線測試</button>
               <button className="btn btn-primary" style={{ flex: 1, fontSize: 13, padding: '8px 0' }} onClick={saveSettings}>儲存設定</button>
-              <button className="btn btn-ghost" style={{ fontSize: 13, padding: '8px 12px' }} onClick={() => setShowSettings(false)}>✕</button>
+              <button
+                className="btn btn-ghost"
+                style={{ fontSize: 13, padding: '8px 10px', color: 'var(--danger, #ef4444)', borderColor: 'rgba(239,68,68,0.3)' }}
+                onClick={() => { clearMessages(); setShowSettings(false); }}
+                title="清除對話紀錄"
+              >
+                🗑️ 清除對話
+              </button>
+              <button className="btn btn-ghost" style={{ fontSize: 13, padding: '8px 10px' }} onClick={() => setShowSettings(false)}>✕</button>
             </div>
           </div>
         )}
@@ -549,13 +669,22 @@ const AIChatPanel: React.FC<AIChatPanelProps> = ({ isOpen, onClose }) => {
           <div ref={messagesEndRef} />
         </div>
 
-        {/* Quick questions */}
-        {messages.length === 0 && !isStreaming && (
-          <div className="ai-qr">
-            {pageQuestions.map((q, i) => (
-              <button key={i} className="ai-qr-btn" onClick={() => sendMessage(q)}>{q}</button>
-            ))}
-          </div>
+        {/* Quick questions：初始問題 or 追加問題 */}
+        {!isStreaming && (
+          messages.length === 0 ? (
+            <div className="ai-qr">
+              {pageQuestions.map((q, i) => (
+                <button key={i} className="ai-qr-btn" onClick={() => sendMessage(q)}>{q}</button>
+              ))}
+            </div>
+          ) : lastAssistantMsg ? (
+            <div className="ai-qr ai-qr-followup">
+              <div className="ai-qr-followup-label">💬 繼續追問</div>
+              {getFollowupQuestions(pageRoot, lastAssistantMsg.content).map((q, i) => (
+                <button key={i} className="ai-qr-btn ai-qr-btn--followup" onClick={() => sendMessage(q)}>{q}</button>
+              ))}
+            </div>
+          ) : null
         )}
 
         {/* Footer input */}
